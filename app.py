@@ -781,11 +781,21 @@ AKTUELL KALENDER ({year}-{month:02d}):
 {calendar_context}
 
 DINA UPPGIFTER:
-1. Svara på frågor om kalendern (vad finns bokat, lediga tider, etc.)
-2. Boka händelser när användaren ber om det
+1. SVARA PÅ FRÅGOR om kalendern (vad finns bokat, lediga tider, etc.) - ANVÄND ALDRIG BOOK_EVENT för frågor!
+2. BOKA händelser ENDAST när användaren ber om det med ord som "boka", "lägg till", "skapa"
 3. Förstå relativa datum (imorgon, nästa vecka, på fredag, etc.)
 
-VIKTIGT - NÄR ANVÄNDAREN BER DIG BOKA/LÄGGA TILL/SKAPA EN HÄNDELSE:
+VIKTIGT - SKILLNAD MELLAN FRÅGOR OCH BOKNINGAR:
+❌ FRÅGOR (använd INTE BOOK_EVENT):
+   - "Vad gör Albin den 17e?", "Hitta...", "Visa...", "När har...", "Är det bokat..."
+   - Svara direkt med information från kalenderkontexten ovan!
+
+✅ BOKNINGAR (använd BOOK_EVENT):
+   - "Boka lunch för Maria imorgon kl 12"
+   - "Lägg till tandläkare för Albin på fredag 14:00"
+   - "Skapa familjemiddag på lördag 18:00"
+
+NÄR ANVÄNDAREN BER DIG BOKA/LÄGGA TILL/SKAPA EN HÄNDELSE:
 Du MÅSTE använda BOOK_EVENT-kommandot! Formatet är exakt:
 BOOK_EVENT|användare|YYYY-MM-DD|HH:MM|titel|beskrivning|varaktighet_timmar
 
@@ -951,6 +961,10 @@ def main():
     if 'voice_input' not in st.session_state:
         st.session_state['voice_input'] = ""
 
+    # Initiera AI search state
+    if 'ai_search' not in st.session_state:
+        st.session_state['ai_search'] = ""
+
     # Aktuell månad som default
     today = datetime.now().date()
 
@@ -1088,8 +1102,7 @@ def main():
         # Visa svaret tillfälligt med auto-dismiss
         if "✓" in ai_response:  # Om bokning genomfördes
             st.success(ai_response)
-            # Rensa input och uppdatera kalendern omedelbart
-            st.session_state['ai_search'] = ""
+            # Uppdatera kalendern omedelbart
             st.rerun()
         else:
             # Visa svar för frågor
