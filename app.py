@@ -752,12 +752,12 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API - använder Mistral-7B via gratis tier
-        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+        # Hugging Face Inference API - använder Meta-Llama-3-8B-Instruct (gratis)
+        API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
         headers = {"Authorization": f"Bearer {hf_token}"}
 
-        # Formatera prompt för Mistral
-        prompt = f"<s>[INST] {system_message}\n\nAnvändare: {user_message} [/INST]"
+        # Formatera prompt för Llama-3
+        prompt = f"{system_message}\n\nUser: {user_message}\nAssistant:"
 
         payload = {
             "inputs": prompt,
