@@ -701,8 +701,60 @@ def ai_book_event(user, date, time, title, description="", duration=1):
     except Exception as e:
         return f"✗ Fel vid bokning: {str(e)}"
 
+def handle_simple_command(user_message, year, month):
+    """Enkel regelbaserad kommandohantering"""
+    import re
+
+    msg_lower = user_message.lower()
+    today = datetime.now()
+
+    # Hitta användare
+    users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
+    user = "Albin"  # Default
+    for key, val in users_map.items():
+        if key in msg_lower:
+            user = val
+            break
+
+    # Hitta datum
+    date_obj = today
+    if "imorgon" in msg_lower:
+        date_obj = today + timedelta(days=1)
+    elif "övermorgon" in msg_lower:
+        date_obj = today + timedelta(days=2)
+
+    # Hitta tid
+    time_match = re.search(r'(\d{1,2})[:\.](\d{2})', user_message)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+        time_str = f"{hour:02d}:{minute:02d}"
+    else:
+        hour_match = re.search(r'kl\.?\s*(\d{1,2})', user_message)
+        if hour_match:
+            hour = int(hour_match.group(1))
+            time_str = f"{hour:02d}:00"
+        else:
+            time_str = "09:00"
+
+    # Hitta titel
+    title = "Händelse"
+    for pattern in [r'boka\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)', r'lägg\s+till\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)']:
+        match = re.search(pattern, msg_lower)
+        if match:
+            title = match.group(1).strip().title()
+            break
+
+    date_str = date_obj.strftime('%Y-%m-%d')
+
+    try:
+        add_event(user, date_str, time_str, title, "", 1)
+        return f"✓ Bokad: {title} för {user} den {date_str} kl {time_str}"
+    except Exception as e:
+        return f"⚠️ Kunde inte boka: {str(e)}"
+
 def call_gpt_local(user_message, year, month):
-    """Anropar Hugging Face API med Mistral-7B"""
+    """Anropar Hugging Face API med fallback till enkel regelbaserad AI"""
 
     # Hämta API-nyckel från Streamlit secrets
     try:
@@ -710,8 +762,9 @@ def call_gpt_local(user_message, year, month):
     except:
         hf_token = ""
 
+    # Om ingen API-nyckel, använd enkel regelbaserad assistent
     if not hf_token:
-        return "⚠️ Hugging Face API-nyckel saknas. Lägg till den i Streamlit Cloud settings under 'Secrets'."
+        return handle_simple_command(user_message, year, month)
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
@@ -772,7 +825,8 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
         response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
         if response.status_code != 200:
-            return f"⚠️ API-fel: {response.status_code}. Modellen laddas kanske, försök igen om 20 sekunder."
+            # Fallback till enkel regelbaserad AI
+            return handle_simple_command(user_message, year, month)
 
         result = response.json()
 
