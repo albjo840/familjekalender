@@ -78,6 +78,25 @@ st.markdown("""
         .stButton button {
             margin: 0 !important;
         }
+
+        /* Fixa knappfärger - bakgrundsfärg först, svart när klickad */
+        .stButton > button[kind="secondary"] {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            color: #1e1e1e !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .stButton > button[kind="secondary"]:hover {
+            background-color: rgba(255, 255, 255, 1) !important;
+            border: 1px solid rgba(0, 0, 0, 0.2) !important;
+        }
+
+        .stButton > button[kind="secondary"]:active,
+        .stButton > button[kind="secondary"]:focus {
+            background-color: #1e1e1e !important;
+            color: white !important;
+            border: 1px solid #1e1e1e !important;
+        }
     }
 
     .calendar-container {
@@ -528,7 +547,8 @@ def get_events_for_week(start_date):
 
         end_date = start_date + timedelta(days=6)
         c.execute('''
-            SELECT * FROM events
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            FROM events
             WHERE date BETWEEN ? AND ?
             ORDER BY date, time
         ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
@@ -554,7 +574,8 @@ def get_events_for_month(year, month):
 
         # Optimerad SQL: Hämta bara relevanta events (inkl. återkommande som kan visas i månaden)
         c.execute('''
-            SELECT * FROM events
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            FROM events
             WHERE (date BETWEEN ? AND ?)
                OR (repeat_pattern IS NOT NULL AND date <= ?)
             ORDER BY date, time
@@ -1294,8 +1315,7 @@ def main():
         event_description = st.text_area("Beskrivning:", placeholder="Extra detaljer (frivilligt)")
 
         # Återkommande händelse
-        st.markdown("#### 🔁 Upprepa händelse")
-        repeat_enabled = st.checkbox("Upprepa varje vecka", value=False)
+        repeat_enabled = st.checkbox("🔁 Upprepa varje vecka", value=False)
 
         repeat_pattern = None
         repeat_until = None
