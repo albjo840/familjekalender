@@ -752,12 +752,12 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API - använder Meta-Llama-3-8B-Instruct (gratis)
-        API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+        # Hugging Face Inference API - använder HuggingFaceH4/zephyr-7b-beta (helt öppen, ingen licens krävs)
+        API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
         headers = {"Authorization": f"Bearer {hf_token}"}
 
-        # Formatera prompt för Llama-3
-        prompt = f"{system_message}\n\nUser: {user_message}\nAssistant:"
+        # Formatera prompt för Zephyr
+        prompt = f"<|system|>\n{system_message}</s>\n<|user|>\n{user_message}</s>\n<|assistant|>"
 
         payload = {
             "inputs": prompt,
