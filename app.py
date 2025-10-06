@@ -712,7 +712,6 @@ def handle_simple_command(user_message, year, month):
     question_keywords = ['vad', 'när', 'vilken', 'visa', 'hitta', 'har', 'finns', 'ledig', 'upptagen']
     if any(keyword in msg_lower for keyword in question_keywords):
         # Det är en fråga - svara från kalenderkontexten
-        calendar_context = get_calendar_context(year, month)
 
         # Hitta vilken användare det gäller
         users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
@@ -722,24 +721,75 @@ def handle_simple_command(user_message, year, month):
                 mentioned_user = val
                 break
 
-        # Försök hitta datum i frågan
-        date_match = re.search(r'(\d{1,2})\s*(?:e|:e)?(?:\s+(?:oktober|november|december|januari|februari|mars|april|maj|juni|juli|augusti|september))?', msg_lower)
+        # Försök extrahera datum från frågan
+        target_date = None
 
-        if mentioned_user or date_match:
-            # Hämta alla events för månaden
-            events = get_events_for_month(year, month)
-            if events:
-                response = f"Här är vad jag hittade:\n\n"
-                for event in events:
-                    e = safe_unpack_event(event)
-                    if mentioned_user and e['user'] != mentioned_user:
-                        continue
-                    response += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})\n"
-                return response if len(response) > 30 else "Jag hittade inga händelser som matchar din fråga."
+        # Kolla efter specifikt datum (t.ex. "17e oktober", "17 oktober", "den 17")
+        month_names = {
+            'januari': 1, 'februari': 2, 'mars': 3, 'april': 4, 'maj': 5, 'juni': 6,
+            'juli': 7, 'augusti': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12
+        }
+
+        # Försök matcha "17e oktober" eller "17 oktober"
+        for month_name, month_num in month_names.items():
+            pattern = r'(\d{1,2})\s*(?:e|:e)?\s+' + month_name
+            match = re.search(pattern, msg_lower)
+            if match:
+                day = int(match.group(1))
+                # Använd current year om inte specificerat
+                try:
+                    target_date = datetime(today.year, month_num, day).strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+                break
+
+        # Om inget specifikt datum, kolla "den 17", "17e", etc.
+        if not target_date:
+            day_match = re.search(r'den\s+(\d{1,2})|(\d{1,2})\s*(?:e|:e)', msg_lower)
+            if day_match:
+                day = int(day_match.group(1) or day_match.group(2))
+                # Använd aktuell månad
+                try:
+                    target_date = datetime(today.year, today.month, day).strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+
+        # Hämta alla events för månaden (eller flera månader om nödvändigt)
+        events = get_events_for_month(year, month)
+
+        # Om target_date är i en annan månad, hämta även den månaden
+        if target_date:
+            target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+            if target_dt.month != month:
+                events += get_events_for_month(target_dt.year, target_dt.month)
+
+        if events:
+            response = ""
+            found_any = False
+
+            for event in events:
+                e = safe_unpack_event(event)
+
+                # Filtrera på användare om specificerad
+                if mentioned_user and e['user'] != mentioned_user:
+                    continue
+
+                # Filtrera på datum om specificerat
+                if target_date and e['date'] != target_date:
+                    continue
+
+                found_any = True
+                response += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})\n"
+
+            if found_any:
+                prefix = f"{'För ' + mentioned_user if mentioned_user else 'Händelser'}"
+                if target_date:
+                    prefix += f" den {target_date}"
+                return f"{prefix}:\n\n{response}"
             else:
-                return "Inga händelser hittades för den perioden."
+                return "Jag hittade inga händelser som matchar din fråga."
         else:
-            return calendar_context
+            return "Inga händelser hittades för den perioden."
 
     # Kolla om det är en BOKNINGSFÖRFRÅGAN
     booking_keywords = ['boka', 'lägg till', 'skapa', 'planera']
@@ -1119,42 +1169,6 @@ def main():
     }
     </script>
     """, unsafe_allow_html=True)
-
-    # Admin: Visa antal händelser och rensa-knapp i en expander
-    with st.expander("🔧 Admin"):
-        conn = sqlite3.connect('familjekalender.db')
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM events")
-        total_events = c.fetchone()[0]
-        c.execute("SELECT COUNT(*) FROM events WHERE title = 'Händelse' AND time = '09:00'")
-        suspicious_events = c.fetchone()[0]
-        conn.close()
-
-        st.write(f"📊 Totalt antal händelser: **{total_events}**")
-        st.write(f"⚠️ Misstänkta duplikathändelser: **{suspicious_events}**")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🗑️ Rensa misstänkta händelser", type="secondary"):
-                conn = sqlite3.connect('familjekalender.db')
-                c = conn.cursor()
-                c.execute("DELETE FROM events WHERE title = 'Händelse' AND time = '09:00'")
-                deleted = c.rowcount
-                conn.commit()
-                conn.close()
-                st.success(f"Raderade {deleted} misstänkta händelser!")
-                st.rerun()
-
-        with col2:
-            if st.button("⚠️ RENSA ALLA HÄNDELSER", type="secondary"):
-                conn = sqlite3.connect('familjekalender.db')
-                c = conn.cursor()
-                c.execute("DELETE FROM events")
-                deleted = c.rowcount
-                conn.commit()
-                conn.close()
-                st.warning(f"Raderade ALLA {deleted} händelser!")
-                st.rerun()
 
     # AI Sökruta - kompakt
     st.markdown("""
