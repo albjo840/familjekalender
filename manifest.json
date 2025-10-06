@@ -1,0 +1,17 @@
+{
+  "name": "Familjekalender",
+  "short_name": "Kalender",
+  "description": "Familjekalender för bokningar och händelser",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff4b4b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://streamlit.io/images/brand/streamlit-mark-color.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

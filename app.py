@@ -16,6 +16,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# PWA metadata för installationsbar app
+st.markdown("""
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kalender">
+<meta name="theme-color" content="#ff4b4b">
+""", unsafe_allow_html=True)
+
 # CSS för Apple-liknande design med drag-funktionalitet
 st.markdown("""
 <style>
