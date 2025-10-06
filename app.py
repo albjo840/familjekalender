@@ -3,9 +3,10 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import calendar
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 import html
+# AI-funktionalitet inaktiverad för Streamlit Cloud deployment
+# import torch
+# from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Konfigurera sidan
 st.set_page_config(
