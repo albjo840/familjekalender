@@ -752,8 +752,8 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API
-        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+        # Hugging Face Inference API - använder Mistral-7B via gratis tier
+        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
         headers = {"Authorization": f"Bearer {hf_token}"}
 
         # Formatera prompt för Mistral
