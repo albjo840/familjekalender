@@ -708,6 +708,44 @@ def handle_simple_command(user_message, year, month):
     msg_lower = user_message.lower()
     today = datetime.now()
 
+    # VIKTIGT: Kolla först om det är en FRÅGA (inte en bokning)
+    question_keywords = ['vad', 'när', 'vilken', 'visa', 'hitta', 'har', 'finns', 'ledig', 'upptagen']
+    if any(keyword in msg_lower for keyword in question_keywords):
+        # Det är en fråga - svara från kalenderkontexten
+        calendar_context = get_calendar_context(year, month)
+
+        # Hitta vilken användare det gäller
+        users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
+        mentioned_user = None
+        for key, val in users_map.items():
+            if key in msg_lower:
+                mentioned_user = val
+                break
+
+        # Försök hitta datum i frågan
+        date_match = re.search(r'(\d{1,2})\s*(?:e|:e)?(?:\s+(?:oktober|november|december|januari|februari|mars|april|maj|juni|juli|augusti|september))?', msg_lower)
+
+        if mentioned_user or date_match:
+            # Hämta alla events för månaden
+            events = get_events_for_month(year, month)
+            if events:
+                response = f"Här är vad jag hittade:\n\n"
+                for event in events:
+                    e = safe_unpack_event(event)
+                    if mentioned_user and e['user'] != mentioned_user:
+                        continue
+                    response += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})\n"
+                return response if len(response) > 30 else "Jag hittade inga händelser som matchar din fråga."
+            else:
+                return "Inga händelser hittades för den perioden."
+        else:
+            return calendar_context
+
+    # Kolla om det är en BOKNINGSFÖRFRÅGAN
+    booking_keywords = ['boka', 'lägg till', 'skapa', 'planera']
+    if not any(keyword in msg_lower for keyword in booking_keywords):
+        return "⚠️ Jag förstod inte din förfrågan. Vill du boka något eller ställa en fråga om kalendern?"
+
     # Hitta användare
     users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
     user = "Albin"  # Default
@@ -1081,6 +1119,42 @@ def main():
     }
     </script>
     """, unsafe_allow_html=True)
+
+    # Admin: Visa antal händelser och rensa-knapp i en expander
+    with st.expander("🔧 Admin"):
+        conn = sqlite3.connect('familjekalender.db')
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM events")
+        total_events = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM events WHERE title = 'Händelse' AND time = '09:00'")
+        suspicious_events = c.fetchone()[0]
+        conn.close()
+
+        st.write(f"📊 Totalt antal händelser: **{total_events}**")
+        st.write(f"⚠️ Misstänkta duplikathändelser: **{suspicious_events}**")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Rensa misstänkta händelser", type="secondary"):
+                conn = sqlite3.connect('familjekalender.db')
+                c = conn.cursor()
+                c.execute("DELETE FROM events WHERE title = 'Händelse' AND time = '09:00'")
+                deleted = c.rowcount
+                conn.commit()
+                conn.close()
+                st.success(f"Raderade {deleted} misstänkta händelser!")
+                st.rerun()
+
+        with col2:
+            if st.button("⚠️ RENSA ALLA HÄNDELSER", type="secondary"):
+                conn = sqlite3.connect('familjekalender.db')
+                c = conn.cursor()
+                c.execute("DELETE FROM events")
+                deleted = c.rowcount
+                conn.commit()
+                conn.close()
+                st.warning(f"Raderade ALLA {deleted} händelser!")
+                st.rerun()
 
     # AI Sökruta - kompakt
     st.markdown("""
