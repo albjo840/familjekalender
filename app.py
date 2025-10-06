@@ -4,9 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta
 import calendar
 import html
-# AI-funktionalitet inaktiverad för Streamlit Cloud deployment
-# import torch
-# from transformers import AutoModelForCausalLM, AutoTokenizer
+import requests
+import json
 
 # Konfigurera sidan
 st.set_page_config(
@@ -702,37 +701,17 @@ def ai_book_event(user, date, time, title, description="", duration=1):
     except Exception as e:
         return f"✗ Fel vid bokning: {str(e)}"
 
-@st.cache_resource
-def load_local_model():
-    """Laddar GPT-modellen lokalt med GPU-stöd"""
-    try:
-        # Använd Llama-3-8B-Instruct - redan nedladdad, utmärkt för function calling
-        model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-        # Llama saknar pad_token, sätt det till eos_token
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        dtype = torch.float16 if device == "cuda" else torch.float32
-
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            dtype=dtype,
-            device_map="auto",
-            low_cpu_mem_usage=True
-        )
-
-        return model, tokenizer, device
-    except Exception as e:
-        st.error(f"Kunde inte ladda modell: {str(e)}")
-        return None, None, None
-
 def call_gpt_local(user_message, year, month):
-    """Anropar GPT lokalt på GPU"""
+    """Anropar Hugging Face API med Mistral-7B"""
+
+    # Hämta API-nyckel från Streamlit secrets
+    try:
+        hf_token = st.secrets.get("HUGGINGFACE_API_KEY", "")
+    except:
+        hf_token = ""
+
+    if not hf_token:
+        return "⚠️ Hugging Face API-nyckel saknas. Lägg till den i Streamlit Cloud settings under 'Secrets'."
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
@@ -741,7 +720,7 @@ def call_gpt_local(user_message, year, month):
     today = datetime.now()
     system_message = f"""Du är en intelligent kalenderassistent för en familjekalender.
 
-ANVÄNDARE: Albin, Maria, Familj
+ANVÄNDARE: Albin, Maria, Olle, Ellen, Familj
 
 DAGENS DATUM: {today.strftime('%Y-%m-%d')} ({today.strftime('%A, %d %B %Y')})
 
@@ -772,54 +751,38 @@ REGLER:
 
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
-    # Ladda modell
-    model, tokenizer, device = load_local_model()
-
-    if model is None:
-        return "⚠️ Kunde inte ladda AI-modellen. Kontrollera GPU-konfigurationen."
-
     try:
-        # Skapa Qwen2.5 chat format
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message}
-        ]
+        # Hugging Face Inference API
+        API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+        headers = {"Authorization": f"Bearer {hf_token}"}
 
-        # Använd tokenizers chat template
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
+        # Formatera prompt för Mistral
+        prompt = f"<s>[INST] {system_message}\n\nAnvändare: {user_message} [/INST]"
 
-        # Tokenisera
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048).to(device)
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 350,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "return_full_text": False
+            }
+        }
 
-        # Generera svar
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=350,
-                temperature=0.7,
-                top_p=0.9,
-                do_sample=True,
-                pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id else tokenizer.eos_token_id
-            )
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
-        # Dekoda svaret
-        response = tokenizer.decode(outputs[0], skip_special_tokens=False)
+        if response.status_code != 200:
+            return f"⚠️ API-fel: {response.status_code}. Modellen laddas kanske, försök igen om 20 sekunder."
 
-        # Extrahera bara assistentens svar för Llama-3
-        if "<|start_header_id|>assistant<|end_header_id|>" in response:
-            ai_response = response.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip()
-            if "<|eot_id|>" in ai_response:
-                ai_response = ai_response.split("<|eot_id|>")[0].strip()
-        elif user_message in response:
-            ai_response = response.split(user_message)[-1].strip()
+        result = response.json()
+
+        # Extrahera svaret
+        if isinstance(result, list) and len(result) > 0:
+            ai_response = result[0].get('generated_text', '').strip()
+        elif isinstance(result, dict):
+            ai_response = result.get('generated_text', '').strip()
         else:
-            # Fallback: ta bort input från output
-            input_length = inputs['input_ids'].shape[1]
-            ai_response = tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True).strip()
+            ai_response = str(result)
 
         # Kontrollera om AI:n vill boka en händelse
         if "BOOK_EVENT|" in ai_response:
