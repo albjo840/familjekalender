@@ -851,19 +851,37 @@ def handle_simple_command(user_message, year, month):
     elif "övermorgon" in msg_lower:
         date_obj = today + timedelta(days=2)
 
-    # Hitta tid
-    time_match = re.search(r'(\d{1,2})[:\.](\d{2})', user_message)
-    if time_match:
-        hour = int(time_match.group(1))
-        minute = int(time_match.group(2))
-        time_str = f"{hour:02d}:{minute:02d}"
+    # Hitta tid och sluttid
+    time_str = "09:00"
+    duration = 1
+
+    # Leta efter "från X till Y" eller "X till Y" format
+    time_range_match = re.search(r'(\d{1,2})[:\.](\d{2})\s+till\s+(\d{1,2})[:\.]?(\d{2})?', user_message)
+    if time_range_match:
+        start_hour = int(time_range_match.group(1))
+        start_min = int(time_range_match.group(2))
+        end_hour = int(time_range_match.group(3))
+        end_min = int(time_range_match.group(4)) if time_range_match.group(4) else 0
+
+        time_str = f"{start_hour:02d}:{start_min:02d}"
+
+        # Beräkna duration i timmar (med decimaler för minuter)
+        start_total_min = start_hour * 60 + start_min
+        end_total_min = end_hour * 60 + end_min
+        duration_minutes = end_total_min - start_total_min
+        duration = max(1, duration_minutes / 60)  # Konvertera till timmar
     else:
-        hour_match = re.search(r'kl\.?\s*(\d{1,2})', user_message)
-        if hour_match:
-            hour = int(hour_match.group(1))
-            time_str = f"{hour:02d}:00"
+        # Enkel tidsmatchning utan sluttid
+        time_match = re.search(r'(\d{1,2})[:\.](\d{2})', user_message)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2))
+            time_str = f"{hour:02d}:{minute:02d}"
         else:
-            time_str = "09:00"
+            hour_match = re.search(r'kl\.?\s*(\d{1,2})', user_message)
+            if hour_match:
+                hour = int(hour_match.group(1))
+                time_str = f"{hour:02d}:00"
 
     # Hitta titel
     title = "Händelse"
@@ -876,8 +894,10 @@ def handle_simple_command(user_message, year, month):
     date_str = date_obj.strftime('%Y-%m-%d')
 
     try:
-        add_event(user, date_str, time_str, title, "", 1)
-        return f"✓ Bokad: {title} för {user} den {date_str} kl {time_str}"
+        add_event(user, date_str, time_str, title, "", duration)
+        end_hour_calc = int(time_str.split(':')[0]) + int(duration)
+        end_min_calc = int((duration % 1) * 60)
+        return f"✓ Bokad: {title} för {user} den {date_str} kl {time_str}-{end_hour_calc:02d}:{end_min_calc:02d}"
     except Exception as e:
         return f"⚠️ Kunde inte boka: {str(e)}"
 
@@ -1390,12 +1410,20 @@ def main():
 
                 # Beräkna sluttid
                 try:
-                    duration = int(event.get('duration', 1))
+                    duration = float(event.get('duration', 1))
                 except (ValueError, TypeError):
-                    duration = 1
-                start_hour = int(event_time.split(':')[0])
-                end_hour = start_hour + duration
-                end_time = f"{end_hour:02d}:00"
+                    duration = 1.0
+
+                # Beräkna sluttid med minuter
+                start_parts = event_time.split(':')
+                start_hour = int(start_parts[0])
+                start_min = int(start_parts[1]) if len(start_parts) > 1 else 0
+
+                # Lägg till duration (i timmar med decimaler)
+                end_total_minutes = start_hour * 60 + start_min + int(duration * 60)
+                end_hour = end_total_minutes // 60
+                end_min = end_total_minutes % 60
+                end_time = f"{end_hour:02d}:{end_min:02d}"
                 time_range = f"{event_time} - {end_time}"
 
                 bg_color = user_colors.get(event_user, '#8e8e93')
