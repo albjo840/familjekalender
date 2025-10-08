@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <script src="https://unpkg.com/streamlit-component-lib@1.4.2/dist/streamlit-component-lib.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .calendar-container {
+            display: flex;
+            gap: 1px;
+            background: #f0f0f0;
+        }
+
+        .day-column {
+            flex: 1;
+            background: white;
+            min-width: 120px;
+        }
+
+        .day-header {
+            background: rgba(248, 249, 250, 0.95);
+            color: #1d1d1f;
+            padding: 16px 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .day-date {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: 400;
+            margin-top: 2px;
+        }
+
+        .day-content {
+            position: relative;
+            min-height: 800px;
+            background: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+        }
+
+        .time-slot {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 50px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .time-label {
+            font-size: 11px;
+            color: #8e8e93;
+            padding: 4px 8px;
+        }
+
+        .event {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .event:hover {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .event-title {
+            font-weight: 500;
+        }
+
+        .event-user {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .user-albin {
+            background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+            color: white;
+        }
+
+        .user-maria {
+            background: linear-gradient(135deg, #ff9500 0%, #ff6b35 100%);
+            color: white;
+        }
+
+        .user-familj {
+            background: linear-gradient(135deg, #af52de 0%, #5856d6 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        const times = [];
+        for (let h = 7; h < 23; h++) {
+            times.push(`${h.toString().padStart(2, '0')}:00`);
+        }
+
+        function onRender(event) {
+            const data = event.detail.args.week_data;
+
+            if (!data) return;
+
+            const root = document.getElementById('root');
+            root.innerHTML = '';
+
+            const container = document.createElement('div');
+            container.className = 'calendar-container';
+
+            const days = ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag', 'Söndag'];
+
+            days.forEach((day, dayIdx) => {
+                const dayCol = document.createElement('div');
+                dayCol.className = 'day-column';
+
+                // Header
+                const header = document.createElement('div');
+                header.className = 'day-header';
+                header.innerHTML = `
+                    <div>${day}</div>
+                    <div class="day-date">${data.dates[dayIdx]}</div>
+                `;
+                dayCol.appendChild(header);
+
+                // Content
+                const content = document.createElement('div');
+                content.className = 'day-content';
+
+                // Time slots
+                times.forEach((time, idx) => {
+                    const slot = document.createElement('div');
+                    slot.className = 'time-slot';
+                    slot.style.top = `${idx * 50}px`;
+                    slot.innerHTML = `<span class="time-label">${time}</span>`;
+                    content.appendChild(slot);
+                });
+
+                // Events
+                const dayEvents = data.events.filter(e => e.day === dayIdx);
+                dayEvents.forEach(event => {
+                    const timeIndex = times.indexOf(event.time);
+                    if (timeIndex === -1) return;
+
+                    const eventEl = document.createElement('div');
+                    eventEl.className = `event user-${event.user.toLowerCase()}`;
+                    eventEl.style.top = `${timeIndex * 50 + 20}px`;
+                    eventEl.style.height = `${(event.duration || 1) * 50 - 8}px`;
+                    eventEl.innerHTML = `
+                        <div class="event-title">${event.title}</div>
+                        <div class="event-user">${event.user}</div>
+                    `;
+                    content.appendChild(eventEl);
+                });
+
+                // Click handler
+                content.addEventListener('click', (e) => {
+                    const rect = content.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const hourIndex = Math.floor(y / 50);
+                    const hour = 7 + hourIndex;
+                    const timeStr = hour.toString().padStart(2, '0') + ':00';
+
+                    Streamlit.setComponentValue({
+                        date: data.dates[dayIdx],
+                        time: timeStr,
+                        day: day
+                    });
+                });
+
+                dayCol.appendChild(content);
+                container.appendChild(dayCol);
+            });
+
+            root.appendChild(container);
+            Streamlit.setFrameHeight();
+        }
+
+        Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+        Streamlit.setComponentReady();
+    </script>
+</body>
+</html>

@@ -6,6 +6,8 @@ import calendar
 import html
 import requests
 import json
+import os
+import shutil
 
 # Konfigurera sidan
 st.set_page_config(
@@ -446,9 +448,40 @@ def safe_unpack_event(event):
     else:
         return defaults
 
+# Databasplats - använd miljövariabel eller default
+DB_PATH = os.getenv('CALENDAR_DB_PATH', 'familjekalender.db')
+
 # Databas-funktioner
+def backup_database():
+    """Skapar en backup av databasen"""
+    if os.path.exists(DB_PATH):
+        backup_path = f"{DB_PATH}.backup"
+        try:
+            shutil.copy2(DB_PATH, backup_path)
+            return True
+        except Exception as e:
+            print(f"Backup failed: {e}")
+            return False
+    return False
+
+def restore_database():
+    """Återställer databasen från backup om den saknas"""
+    backup_path = f"{DB_PATH}.backup"
+    if not os.path.exists(DB_PATH) and os.path.exists(backup_path):
+        try:
+            shutil.copy2(backup_path, DB_PATH)
+            print("Database restored from backup")
+            return True
+        except Exception as e:
+            print(f"Restore failed: {e}")
+            return False
+    return False
+
 def init_database():
-    conn = sqlite3.connect('familjekalender.db')
+    # Försök återställa från backup om databasen saknas
+    restore_database()
+
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS events (
@@ -459,7 +492,8 @@ def init_database():
             duration INTEGER DEFAULT 1,
             title TEXT NOT NULL,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            reminder BOOLEAN DEFAULT 0
         )
     ''')
     # Lägg till duration-kolumn om den inte finns
@@ -471,10 +505,12 @@ def init_database():
         c.execute('ALTER TABLE events ADD COLUMN repeat_pattern TEXT DEFAULT NULL')
     if 'repeat_until' not in columns:
         c.execute('ALTER TABLE events ADD COLUMN repeat_until TEXT DEFAULT NULL')
+    if 'reminder' not in columns:
+        c.execute('ALTER TABLE events ADD COLUMN reminder BOOLEAN DEFAULT 0')
     conn.commit()
     conn.close()
 
-def add_event(user, date, time, title, description="", duration=1, repeat_pattern=None, repeat_until=None):
+def add_event(user, date, time, title, description="", duration=1, repeat_pattern=None, repeat_until=None, reminder=False):
     # Input validering
     import re
     VALID_USERS = ["Albin", "Maria", "Olle", "Ellen", "Familj"]
@@ -508,13 +544,15 @@ def add_event(user, date, time, title, description="", duration=1, repeat_patter
 
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute('''
-            INSERT INTO events (user, date, time, title, description, duration, repeat_pattern, repeat_until)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (user, date, time, title, description, duration, repeat_pattern, repeat_until))
+            INSERT INTO events (user, date, time, title, description, duration, repeat_pattern, repeat_until, reminder)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user, date, time, title, description, duration, repeat_pattern, repeat_until, 1 if reminder else 0))
         conn.commit()
+        # Backup efter varje ändring
+        backup_database()
     except Exception as e:
         if conn:
             conn.rollback()
@@ -526,10 +564,11 @@ def add_event(user, date, time, title, description="", duration=1, repeat_patter
 def update_event_duration(event_id, new_duration):
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute('UPDATE events SET duration = ? WHERE id = ?', (new_duration, event_id))
         conn.commit()
+        backup_database()
     except Exception as e:
         if conn:
             conn.rollback()
@@ -541,7 +580,7 @@ def update_event_duration(event_id, new_duration):
 def get_events_for_week(start_date):
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
 
         end_date = start_date + timedelta(days=6)
@@ -561,7 +600,7 @@ def get_events_for_week(start_date):
 def get_events_for_month(year, month):
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
 
         # Första och sista dagen i månaden
@@ -621,10 +660,11 @@ def get_events_for_month(year, month):
 def delete_event(event_id):
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute('DELETE FROM events WHERE id = ?', (event_id,))
         conn.commit()
+        backup_database()
     except Exception as e:
         if conn:
             conn.rollback()
@@ -662,7 +702,7 @@ def get_available_times(date_str, user=None):
     """Hittar lediga tider för ett givet datum"""
     conn = None
     try:
-        conn = sqlite3.connect('familjekalender.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
 
         if user:
@@ -677,8 +717,8 @@ def get_available_times(date_str, user=None):
         if conn:
             conn.close()
 
-    # Generera lista över lediga tider (07:00-22:00)
-    all_hours = [f"{h:02d}:00" for h in range(7, 23)]
+    # Generera lista över lediga tider (06:00-22:00)
+    all_hours = [f"{h:02d}:00" for h in range(6, 23)]
     booked_hours = set()
 
     for time_str, duration in booked_events:
@@ -1091,7 +1131,7 @@ def main():
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
 
-    # Röstinmatning med Web Speech API - kompakt
+    # Röstinmatning med Web Speech API och Push-notifikationer - kompakt
     st.markdown("""
     <div id="voice-input-container" style="text-align: center; margin-bottom: 0.5rem;">
         <button id="voice-button" onclick="startVoiceRecognition()"
@@ -1103,6 +1143,67 @@ def main():
         </button>
         <p id="voice-status" style="color: white; margin-top: 0.3rem; font-size: 11px;"></p>
     </div>
+
+    <script>
+    // Push-notifikationer setup
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+            console.log('Service Worker registration failed:', err);
+        });
+    }
+
+    // Begär notifikationspermission
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(function(permission) {
+            if (permission === 'granted') {
+                console.log('Notification permission granted');
+            }
+        });
+    }
+
+    // Funktion för att schemalägga notifikation
+    function scheduleNotification(eventTitle, eventDate, eventTime) {
+        if (!('Notification' in window)) {
+            console.log('This browser does not support notifications');
+            return;
+        }
+
+        if (Notification.permission !== 'granted') {
+            console.log('Notification permission not granted');
+            return;
+        }
+
+        // Beräkna tid till händelsen minus 15 minuter
+        const eventDateTime = new Date(eventDate + ' ' + eventTime);
+        const reminderTime = new Date(eventDateTime.getTime() - 15 * 60000);
+        const now = new Date();
+        const timeUntilReminder = reminderTime.getTime() - now.getTime();
+
+        if (timeUntilReminder > 0) {
+            setTimeout(function() {
+                new Notification('📅 Påminnelse: ' + eventTitle, {
+                    body: 'Börjar om 15 minuter (' + eventTime + ')',
+                    icon: '📅',
+                    requireInteraction: true
+                });
+            }, timeUntilReminder);
+        }
+    }
+
+    // Läs events från localStorage och schemalägg notifikationer
+    function loadAndScheduleReminders() {
+        // Detta skulle kunna kopplas till Streamlit session state
+        // För nu: demonstration av funktionaliteten
+        console.log('Reminder system active');
+    }
+
+    // Kör när sidan laddas
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadAndScheduleReminders);
+    } else {
+        loadAndScheduleReminders();
+    }
+    </script>
 
     <script>
     let recognition;
@@ -1279,6 +1380,8 @@ def main():
 
         # Visa events som färgkodade boxar (ej klickbara)
         if not day_events.empty:
+            # Sortera händelser kronologiskt efter tid
+            day_events = day_events.sort_values('time')
             for idx, event in day_events.iterrows():
                 safe_title = html.escape(str(event['title']))
                 event_time = event.get('time', '')
@@ -1345,8 +1448,14 @@ def main():
 
                     col_e_start, col_e_end = st.columns(2)
                     with col_e_start:
-                        edit_time = st.selectbox("Från:", [f"{h:02d}:00" for h in range(7, 23)],
-                                                index=[f"{h:02d}:00" for h in range(7, 23)].index(event['time']),
+                        # Generera tider med minutprecision
+                        time_options = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in range(0, 60, 5)]
+                        current_time = event['time']
+                        if current_time not in time_options:
+                            time_options.append(current_time)
+                            time_options.sort()
+                        edit_time = st.selectbox("Från:", time_options,
+                                                index=time_options.index(current_time),
                                                 key=f"edit_time_{event['id']}")
                     with col_e_end:
                         current_duration = event.get('duration', 1)
@@ -1354,9 +1463,20 @@ def main():
                             dur = int(current_duration) if current_duration else 1
                         except (ValueError, TypeError):
                             dur = 1
-                        current_end_hour = int(event['time'].split(':')[0]) + dur
-                        edit_end_time = st.selectbox("Till:", [f"{h:02d}:00" for h in range(7, 24)],
-                                                    index=min(current_end_hour - 7, 17),
+                        # Beräkna sluttid baserat på duration
+                        time_parts = event['time'].split(':')
+                        start_hour = int(time_parts[0])
+                        start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
+                        end_total_min = start_hour * 60 + start_min + dur * 60
+                        current_end_hour = end_total_min // 60
+                        current_end_min = end_total_min % 60
+                        end_time_options = [f"{h:02d}:{m:02d}" for h in range(6, 24) for m in range(0, 60, 5)]
+                        current_end_time = f"{current_end_hour:02d}:{current_end_min:02d}"
+                        if current_end_time not in end_time_options:
+                            end_time_options.append(current_end_time)
+                            end_time_options.sort()
+                        edit_end_time = st.selectbox("Till:", end_time_options,
+                                                    index=end_time_options.index(current_end_time) if current_end_time in end_time_options else 0,
                                                     key=f"edit_end_{event['id']}")
 
                     edit_desc = st.text_area("Beskrivning:", value=event.get('description', ''),
@@ -1365,50 +1485,54 @@ def main():
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button("💾 Spara", key=f"save_{event['id']}", use_container_width=True):
-                            # Beräkna ny duration
-                            start_hour = int(edit_time.split(':')[0])
-                            end_hour = int(edit_end_time.split(':')[0])
-                            new_duration = max(1, end_hour - start_hour)
+                            # Beräkna ny duration baserat på minuter
+                            start_parts = edit_time.split(':')
+                            start_total_min = int(start_parts[0]) * 60 + int(start_parts[1])
+                            end_parts = edit_end_time.split(':')
+                            end_total_min = int(end_parts[0]) * 60 + int(end_parts[1])
+                            new_duration = max(1, (end_total_min - start_total_min) / 60)
 
                             # Uppdatera händelse
-                            conn = sqlite3.connect('familjekalender.db')
+                            conn = sqlite3.connect(DB_PATH)
                             c = conn.cursor()
                             c.execute('UPDATE events SET user=?, title=?, time=?, description=?, duration=? WHERE id=?',
                                     (edit_user, edit_title, edit_time, edit_desc, new_duration, event['id']))
                             conn.commit()
+                            backup_database()
                             conn.close()
                             st.session_state.show_add_dialog = False
                             st.success("Händelse uppdaterad!")
                             st.rerun()
                     with col2:
-                        if st.button("🗑️ Ta bort", key=f"delete_{event['id']}", use_container_width=True):
-                            # Kolla om det är en återkommande händelse
-                            if event.get('repeat_pattern'):
-                                # Visa val för återkommande händelser
-                                st.warning("Detta är en återkommande händelse")
-                                col_del1, col_del2 = st.columns(2)
-                                with col_del1:
-                                    if st.button("Ta bort endast denna", key=f"delete_single_{event['id']}", use_container_width=True):
-                                        # Skapa undantag för detta datum genom att sätta repeat_until till dagen innan
-                                        conn = sqlite3.connect('familjekalender.db')
-                                        c = conn.cursor()
-                                        current_date = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date()
-                                        # Sätt repeat_until till dagen innan detta datum
-                                        new_until = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
-                                        c.execute('UPDATE events SET repeat_until=? WHERE id=?', (new_until, event['id']))
-                                        conn.commit()
-                                        conn.close()
-                                        st.session_state.show_add_dialog = False
-                                        st.success("Denna förekomst borttagen!")
-                                        st.rerun()
-                                with col_del2:
-                                    if st.button("Ta bort alla", key=f"delete_all_{event['id']}", use_container_width=True):
-                                        delete_event(event['id'])
-                                        st.session_state.show_add_dialog = False
-                                        st.success("Alla förekomster borttagna!")
-                                        st.rerun()
-                            else:
-                                # Vanlig händelse - ta bort direkt
+                        # Kolla om det är en återkommande händelse
+                        if event.get('repeat_pattern'):
+                            # Visa val för återkommande händelser direkt
+                            st.info("⚠️ Detta är en återkommande händelse")
+                            col_del1, col_del2 = st.columns(2)
+                            with col_del1:
+                                if st.button("Ta bort endast denna", key=f"delete_single_{event['id']}", use_container_width=True):
+                                    # Skapa undantag för detta datum genom att sätta repeat_until till dagen innan
+                                    conn = sqlite3.connect(DB_PATH)
+                                    c = conn.cursor()
+                                    current_date = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date()
+                                    # Sätt repeat_until till dagen innan detta datum
+                                    new_until = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                                    c.execute('UPDATE events SET repeat_until=? WHERE id=?', (new_until, event['id']))
+                                    conn.commit()
+                                    backup_database()
+                                    conn.close()
+                                    st.session_state.show_add_dialog = False
+                                    st.success("Denna förekomst borttagen!")
+                                    st.rerun()
+                            with col_del2:
+                                if st.button("Ta bort alla", key=f"delete_all_{event['id']}", use_container_width=True):
+                                    delete_event(event['id'])
+                                    st.session_state.show_add_dialog = False
+                                    st.success("Alla förekomster borttagna!")
+                                    st.rerun()
+                        else:
+                            # Vanlig händelse - ta bort direkt
+                            if st.button("🗑️ Ta bort", key=f"delete_{event['id']}", use_container_width=True):
                                 delete_event(event['id'])
                                 st.session_state.show_add_dialog = False
                                 st.rerun()
@@ -1421,16 +1545,34 @@ def main():
 
         col_start, col_end = st.columns(2)
         with col_start:
-            event_time = st.selectbox("Från:", [f"{h:02d}:00" for h in range(7, 23)],
-                                     index=[f"{h:02d}:00" for h in range(7, 23)].index(st.session_state.selected_time))
+            # Generera tider med minutprecision (5 minuters intervall)
+            time_options = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in range(0, 60, 5)]
+            selected_time = st.session_state.selected_time
+            if selected_time not in time_options:
+                time_options.append(selected_time)
+                time_options.sort()
+            event_time = st.selectbox("Från:", time_options,
+                                     index=time_options.index(selected_time))
         with col_end:
             # Beräkna sluttid baserat på starttid (1 timme senare som default)
-            start_hour = int(st.session_state.selected_time.split(':')[0])
-            default_end_hour = min(start_hour + 1, 23)
-            event_end_time = st.selectbox("Till:", [f"{h:02d}:00" for h in range(7, 24)],
-                                         index=max(0, default_end_hour - 7))
+            time_parts = st.session_state.selected_time.split(':')
+            start_hour = int(time_parts[0])
+            start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
+            default_end_total_min = start_hour * 60 + start_min + 60
+            default_end_hour = default_end_total_min // 60
+            default_end_min = default_end_total_min % 60
+            end_time_options = [f"{h:02d}:{m:02d}" for h in range(6, 24) for m in range(0, 60, 5)]
+            default_end_time = f"{default_end_hour:02d}:{default_end_min:02d}"
+            if default_end_time not in end_time_options:
+                end_time_options.append(default_end_time)
+                end_time_options.sort()
+            event_end_time = st.selectbox("Till:", end_time_options,
+                                         index=end_time_options.index(default_end_time) if default_end_time in end_time_options else 0)
 
         event_description = st.text_area("Beskrivning:", placeholder="Extra detaljer (frivilligt)")
+
+        # Påminnelse
+        reminder_enabled = st.checkbox("🔔 Påminnelse 15 min innan", value=False)
 
         # Återkommande händelse
         repeat_enabled = st.checkbox("🔁 Upprepa varje vecka", value=False)
@@ -1439,25 +1581,31 @@ def main():
         repeat_until = None
 
         if repeat_enabled:
-            col_repeat_day, col_repeat_until = st.columns(2)
-            with col_repeat_day:
-                repeat_pattern = st.selectbox("Veckodag:", ["mån", "tis", "ons", "tor", "fre", "lör", "sön"])
-            with col_repeat_until:
-                # Default: 3 månader framåt
-                default_until = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date() + timedelta(days=90)
-                repeat_until_date = st.date_input("Upprepa till:", value=default_until)
-                repeat_until = repeat_until_date.strftime('%Y-%m-%d')
+            # Default: 3 månader framåt
+            default_until = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date() + timedelta(days=90)
+
+            # Auto-beräkna veckodag från valt datum
+            selected_date_obj = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date()
+            weekday_names = ["mån", "tis", "ons", "tor", "fre", "lör", "sön"]
+            repeat_pattern = weekday_names[selected_date_obj.weekday()]
+
+            st.info(f"📅 Denna händelse kommer att upprepas varje **{repeat_pattern}** från och med **{st.session_state.selected_date}**")
+
+            repeat_until_date = st.date_input("Upprepa till:", value=default_until)
+            repeat_until = repeat_until_date.strftime('%Y-%m-%d')
 
         col_submit, col_cancel = st.columns(2)
         with col_submit:
             if st.button("✨ Lägg till", use_container_width=True, type="primary"):
                 if event_title:
-                    # Beräkna duration från start och sluttid
-                    start_hour = int(event_time.split(':')[0])
-                    end_hour = int(event_end_time.split(':')[0])
-                    duration = max(1, end_hour - start_hour)
+                    # Beräkna duration från start och sluttid i minuter
+                    start_parts = event_time.split(':')
+                    start_total_min = int(start_parts[0]) * 60 + int(start_parts[1])
+                    end_parts = event_end_time.split(':')
+                    end_total_min = int(end_parts[0]) * 60 + int(end_parts[1])
+                    duration = max(1, (end_total_min - start_total_min) / 60)
 
-                    add_event(event_user, st.session_state.selected_date, event_time, event_title, event_description, duration, repeat_pattern, repeat_until)
+                    add_event(event_user, st.session_state.selected_date, event_time, event_title, event_description, duration, repeat_pattern, repeat_until, reminder_enabled)
                     st.session_state.show_add_dialog = False
                     st.success(f"Händelse tillagd!")
                     st.rerun()
