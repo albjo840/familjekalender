@@ -584,18 +584,57 @@ def get_events_for_week(start_date):
         c = conn.cursor()
 
         end_date = start_date + timedelta(days=6)
+
+        # Hämta både vanliga händelser och återkommande händelser som kan visas denna vecka
         c.execute('''
             SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
             FROM events
-            WHERE date BETWEEN ? AND ?
+            WHERE (date BETWEEN ? AND ?)
+               OR (repeat_pattern IS NOT NULL AND date <= ?)
             ORDER BY date, time
-        ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        ''', (start_date.strftime('%Y-%m-%d'),
+              end_date.strftime('%Y-%m-%d'),
+              end_date.strftime('%Y-%m-%d')))
 
-        events = c.fetchall()
-        return events
+        all_events = c.fetchall()
     finally:
         if conn:
             conn.close()
+
+    # Expandera återkommande händelser
+    expanded_events = []
+    for event in all_events:
+        e = safe_unpack_event(event)
+        event_date = datetime.strptime(e['date'], '%Y-%m-%d').date()
+
+        if e['repeat_pattern']:  # Återkommande händelse
+            repeat_end = datetime.strptime(e['repeat_until'], '%Y-%m-%d').date() if e['repeat_until'] else end_date
+            weekday_map = {'mån': 0, 'tis': 1, 'ons': 2, 'tor': 3, 'fre': 4, 'lör': 5, 'sön': 6}
+
+            if e['repeat_pattern'] in weekday_map:
+                target_weekday = weekday_map[e['repeat_pattern']]
+                # Börja från veckans start, inte händelsens datum
+                current_date = start_date
+                while current_date <= min(repeat_end, end_date):
+                    # Lägg till om det är rätt veckodag OCH vi är efter händelsens startdatum
+                    if current_date >= event_date and current_date.weekday() == target_weekday:
+                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+                        expanded_events.append((
+                            e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
+                            e['title'], e['description'], e['created_at'], e['duration'],
+                            e['repeat_pattern'], e['repeat_until']
+                        ))
+                    current_date += timedelta(days=1)
+            else:
+                # Ingen giltig repeat pattern, lägg till som vanlig
+                if start_date <= event_date <= end_date:
+                    expanded_events.append(event)
+        else:
+            # Vanlig händelse utan repetering
+            if start_date <= event_date <= end_date:
+                expanded_events.append(event)
+
+    return expanded_events
 
 def get_events_for_month(year, month):
     conn = None
@@ -1056,8 +1095,10 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
 # Huvudapplikation
 def main():
-    # Initiera databas
-    init_database()
+    # Initiera databas endast en gång per session
+    if 'db_initialized' not in st.session_state:
+        init_database()
+        st.session_state['db_initialized'] = True
 
     # Titel och färgförklaring
     st.markdown("""
