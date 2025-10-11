@@ -165,6 +165,8 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 - ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - 9x kraftfullare AI via Hugging Face
 - ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
 - ✅ **Sticky AI-chat** - Röstknapp + textinput följer med längst ner (chatbot-stil)
+  - Förstärkt CSS med !important och z-index 999999 för att överrida Streamlit
+  - Flera selektorvarianter för maximal kompatibilitet
 - ✅ **Telegram-påminnelser** - Push-notiser till telefonen 15 min innan händelser
 - ✅ **Komplett UI återställd** - Veckovisning, färger, återkommande händelser
 - ✅ Återkommande händelser med slutdatum
