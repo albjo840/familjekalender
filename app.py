@@ -800,14 +800,22 @@ def main():
 
     # Skapa DataFrame för enklare hantering
     if events:
-        # Kontrollera om duration finns i resultatet
-        if len(events[0]) >= 8:  # id, user, date, time, duration, title, description, created_at
+        # Databasen har 10 kolumner: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
+        num_cols = len(events[0])
+
+        if num_cols >= 10:  # Full struktur med repeat
+            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
+        elif num_cols >= 8:  # Struktur med duration men utan repeat
             events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at'])
+            events_df['repeat_pattern'] = None
+            events_df['repeat_until'] = None
         else:  # Gammal struktur utan duration
             events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at'])
             events_df['duration'] = 1  # Sätt default duration
+            events_df['repeat_pattern'] = None
+            events_df['repeat_until'] = None
     else:
-        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at'])
+        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
 
     # Dialog för att lägga till händelse
     if 'show_add_dialog' not in st.session_state:
