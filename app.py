@@ -386,6 +386,63 @@ st.markdown("""
         border: 1px solid rgba(142, 142, 147, 0.2);
     }
 
+    /* Sticky AI chat container längst ner */
+    .sticky-chat-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.98) 100%);
+        backdrop-filter: blur(20px);
+        padding: 12px 16px;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .sticky-chat-inner {
+        max-width: 800px;
+        margin: 0 auto;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    /* Gör text input i sticky container snyggare */
+    .sticky-chat-container input[type="text"] {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 22px !important;
+        padding: 10px 16px !important;
+        font-size: 14px !important;
+        color: #1d1d1f !important;
+    }
+
+    .sticky-chat-container input[type="text"]:focus {
+        outline: none !important;
+        border-color: rgba(255, 255, 255, 0.6) !important;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .sticky-chat-container label {
+        display: none !important;
+    }
+
+    @media (max-width: 768px) {
+        .sticky-chat-container {
+            padding: 10px 12px;
+        }
+        .sticky-chat-inner {
+            gap: 8px;
+        }
+    }
+
+    /* Ge plats för sticky container längst ner */
+    .main .block-container {
+        padding-bottom: 90px !important;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -780,6 +837,75 @@ def ai_book_event(user, date, time, title, description="", duration=1):
     except Exception as e:
         return f"✗ Fel vid bokning: {str(e)}"
 
+def send_telegram_reminder(user, title, time_str, date_str):
+    """Skickar Telegram-påminnelse till användare"""
+    try:
+        # Hämta Telegram-konfiguration från secrets
+        bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
+        chat_id_key = f"TELEGRAM_CHAT_ID_{user.upper()}"
+        chat_id = st.secrets.get(chat_id_key, "")
+
+        if not bot_token or not chat_id:
+            print(f"Telegram inte konfigurerat för {user}")
+            return False
+
+        # Skapa meddelande
+        message = f"""📅 *Påminnelse: {title}*
+
+🕐 Börjar om 15 minuter ({time_str})
+👤 {user}
+📆 {date_str}
+
+God förberedelse! 🙂"""
+
+        # Skicka via Telegram Bot API
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+
+    except Exception as e:
+        print(f"Telegram reminder fel: {e}")
+        return False
+
+def check_and_send_reminders():
+    """Kollar efter händelser som behöver påminnelse (körs varje minut)"""
+    try:
+        now = datetime.now()
+        # Kolla 15-16 minuter framåt för att fånga alla som ska få påminnelse
+        reminder_time_start = now + timedelta(minutes=14, seconds=30)
+        reminder_time_end = now + timedelta(minutes=15, seconds=30)
+
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        # Hämta händelser med påminnelse som är 15 min framåt i tiden
+        c.execute('''
+            SELECT user, date, time, title, reminder
+            FROM events
+            WHERE reminder = 1
+              AND date = ?
+        ''', (now.strftime('%Y-%m-%d'),))
+
+        events = c.fetchall()
+        conn.close()
+
+        for event in events:
+            user, date_str, time_str, title, reminder = event
+            event_datetime = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
+
+            # Skicka om händelsen är 15 minuter bort
+            if reminder_time_start <= event_datetime <= reminder_time_end:
+                send_telegram_reminder(user, title, time_str, date_str)
+
+    except Exception as e:
+        print(f"Reminder check fel: {e}")
+
 def handle_simple_command(user_message, year, month):
     """Enkel regelbaserad kommandohantering"""
     import re
@@ -1103,6 +1229,9 @@ def main():
         init_database()
         st.session_state['db_initialized'] = True
 
+    # Kolla och skicka Telegram-påminnelser (körs varje gång sidan laddas)
+    check_and_send_reminders()
+
     # Titel och färgförklaring
     st.markdown("""
     <div style="background: rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 1.5rem;
@@ -1136,11 +1265,6 @@ def main():
                             background: linear-gradient(135deg, #af52de 0%, #5856d6 100%);"></div>
                 <span style="color: white; font-size: 14px;">Familj</span>
             </div>
-        </div>
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2);">
-            <p style="color: white; text-align: center; font-size: 0.95rem; margin-bottom: 0;">
-                🤖 <strong>AI-Assistent</strong> - Fråga eller boka via röst/text nedan
-            </p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1195,18 +1319,19 @@ def main():
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
 
-    # Röstinmatning med Web Speech API och Push-notifikationer - kompakt
+    # Sticky AI-container längst ner - start wrapper
+    st.markdown('<div class="sticky-chat-container"><div class="sticky-chat-inner">', unsafe_allow_html=True)
+
+    # Röstknapp (kompakt, inline)
     st.markdown("""
-    <div id="voice-input-container" style="text-align: center; margin-bottom: 0.5rem;">
-        <button id="voice-button" onclick="startVoiceRecognition()"
-                style="background: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
-                       color: white; border: none; border-radius: 50%; width: 44px; height: 44px;
-                       font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(88,86,214,0.3);
-                       transition: all 0.3s ease;">
-            🎤
-        </button>
-        <p id="voice-status" style="color: white; margin-top: 0.3rem; font-size: 11px;"></p>
-    </div>
+    <button id="voice-button" onclick="startVoiceRecognition()"
+            style="background: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
+                   color: white; border: none; border-radius: 50%; width: 44px; height: 44px;
+                   font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(88,86,214,0.3);
+                   transition: all 0.3s ease; flex-shrink: 0;">
+        🎤
+    </button>
+    <p id="voice-status" style="color: white; margin: 0; font-size: 10px; position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap;"></p>
 
     <script>
     // Push-notifikationer setup
@@ -1335,17 +1460,14 @@ def main():
     </script>
     """, unsafe_allow_html=True)
 
-    # AI Sökruta - kompakt
-    st.markdown("""
-    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; backdrop-filter: blur(10px);">
-    """, unsafe_allow_html=True)
-
-    user_input = st.text_input("🤖 AI-assistent",
-                                placeholder="Boka eller fråga...",
+    # AI textinput (inline i sticky container)
+    user_input = st.text_input("AI",
+                                placeholder="Fråga eller boka...",
                                 key="ai_search",
                                 label_visibility="collapsed")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Stäng sticky container wrappers
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     if user_input:
         # Anropa AI:n (lokalt på GPU)
