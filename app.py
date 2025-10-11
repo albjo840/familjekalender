@@ -386,61 +386,90 @@ st.markdown("""
         border: 1px solid rgba(142, 142, 147, 0.2);
     }
 
-    /* Sticky AI chat container längst ner */
+    /* Sticky AI chat container längst ner - FÖRSTÄRKT */
     .sticky-chat-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.98) 100%);
-        backdrop-filter: blur(20px);
-        padding: 12px 16px;
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-        z-index: 9999;
-        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.98) 100%) !important;
+        backdrop-filter: blur(20px) !important;
+        padding: 12px 16px !important;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2) !important;
+        z-index: 999999 !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+        margin: 0 !important;
     }
 
     .sticky-chat-inner {
-        max-width: 800px;
-        margin: 0 auto;
-        display: flex;
-        gap: 12px;
-        align-items: center;
+        max-width: 800px !important;
+        margin: 0 auto !important;
+        display: flex !important;
+        gap: 12px !important;
+        align-items: center !important;
+        flex-direction: row !important;
     }
 
-    /* Gör text input i sticky container snyggare */
-    .sticky-chat-container input[type="text"] {
-        flex: 1;
+    /* Gör text input i sticky container snyggare - FÖRSTÄRKT */
+    .sticky-chat-container input[type="text"],
+    .sticky-chat-container input {
+        flex: 1 !important;
         background: rgba(255, 255, 255, 0.95) !important;
         border: 1px solid rgba(255, 255, 255, 0.3) !important;
         border-radius: 22px !important;
         padding: 10px 16px !important;
         font-size: 14px !important;
         color: #1d1d1f !important;
+        min-width: 200px !important;
     }
 
-    .sticky-chat-container input[type="text"]:focus {
+    .sticky-chat-container input[type="text"]:focus,
+    .sticky-chat-container input:focus {
         outline: none !important;
         border-color: rgba(255, 255, 255, 0.6) !important;
         box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1) !important;
     }
 
-    .sticky-chat-container label {
+    .sticky-chat-container label,
+    .sticky-chat-container .stTextInput label {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .sticky-chat-container .stTextInput {
+        flex: 1 !important;
+        margin: 0 !important;
+    }
+
+    .sticky-chat-container .stTextInput > div {
+        margin: 0 !important;
     }
 
     @media (max-width: 768px) {
         .sticky-chat-container {
-            padding: 10px 12px;
+            padding: 10px 12px !important;
         }
         .sticky-chat-inner {
-            gap: 8px;
+            gap: 8px !important;
         }
     }
 
-    /* Ge plats för sticky container längst ner */
-    .main .block-container {
-        padding-bottom: 90px !important;
+    /* Ge plats för sticky container längst ner - FÖRSTÄRKT */
+    .main .block-container,
+    .block-container,
+    section.main > div,
+    div[data-testid="stAppViewContainer"] > section {
+        padding-bottom: 100px !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Förhindra att Streamlit flyttar containern */
+    div[data-testid="stVerticalBlock"] > div:has(.sticky-chat-container) {
+        position: static !important;
     }
 
 </style>
