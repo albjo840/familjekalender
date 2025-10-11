@@ -377,7 +377,7 @@ def get_events_for_week(start_date):
 
     end_date = start_date + timedelta(days=6)
     c.execute('''
-        SELECT * FROM events
+        SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until FROM events
         WHERE date BETWEEN ? AND ?
         ORDER BY date, time
     ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
@@ -398,7 +398,7 @@ def get_events_for_month(year, month):
         last_day = datetime(year, month + 1, 1).date() - timedelta(days=1)
 
     c.execute('''
-        SELECT * FROM events
+        SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until FROM events
         WHERE date BETWEEN ? AND ?
         ORDER BY date, time
     ''', (first_day.strftime('%Y-%m-%d'), last_day.strftime('%Y-%m-%d')))
@@ -799,21 +799,9 @@ def main():
     events = get_events_for_month(st.session_state['current_year'], st.session_state['current_month'])
 
     # Skapa DataFrame för enklare hantering
+    # SQL-frågan returnerar alltid 10 kolumner: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
     if events:
-        # Databasen har 10 kolumner: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
-        num_cols = len(events[0])
-
-        if num_cols >= 10:  # Full struktur med repeat
-            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
-        elif num_cols >= 8:  # Struktur med duration men utan repeat
-            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at'])
-            events_df['repeat_pattern'] = None
-            events_df['repeat_until'] = None
-        else:  # Gammal struktur utan duration
-            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at'])
-            events_df['duration'] = 1  # Sätt default duration
-            events_df['repeat_pattern'] = None
-            events_df['repeat_until'] = None
+        events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
     else:
         events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
 
