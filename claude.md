@@ -46,6 +46,7 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 - **Återkommande händelser**: Veckovisa upprepningar med slutdatum
 
 ### AI-Assistent
+- **Sticky chat-bar**: Röstknapp + textinput följer med längst ner (chatbot-stil)
 - **Röstinmatning**: Web Speech API med svensk språkstöd
 - **Smart frågehantering**:
   - "Vad gör Albin 17e oktober?" → Filtrerar på användare och datum
@@ -55,6 +56,15 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
   - "Boka lunch för Maria imorgon kl 12"
   - "Lägg till tandläkare för Albin på fredag 14:00"
   - "Skapa familjemiddag på lördag 18:00 i 2 timmar"
+- **Qwen 2.5 72B**: 9x kraftfullare än tidigare modell
+
+### Påminnelser (Telegram)
+- **Push-notiser till telefonen**: 15 minuter innan händelser
+- **100% gratis**: Via Telegram Bot API
+- **Fungerar överallt**: iOS, Android, Desktop
+- **Pålitligt**: Även när appen är stängd
+- **Enkel setup**: 10 minuter (se TELEGRAM-PÅMINNELSER.md)
+- **Multi-användare**: Stöd för hela familjen
 
 ### Händelsehantering
 - **Lägg till händelser**: Via formulär eller AI-assistent
@@ -151,18 +161,21 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 
 ## Utveckling
 
-### Senaste uppdateringar
-- ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - Kraftfull AI via Hugging Face
+### Senaste uppdateringar (Oktober 2025)
+- ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - 9x kraftfullare AI via Hugging Face
 - ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
-- ✅ Återkommande händelser
+- ✅ **Sticky AI-chat** - Röstknapp + textinput följer med längst ner (chatbot-stil)
+- ✅ **Telegram-påminnelser** - Push-notiser till telefonen 15 min innan händelser
+- ✅ **Komplett UI återställd** - Veckovisning, färger, återkommande händelser
+- ✅ Återkommande händelser med slutdatum
 - ✅ Session state-fix för Streamlit
 - ✅ Förbättrad mobil-responsivitet
 
 ### Kommande funktioner
-- [ ] Notifikationer
 - [ ] Exportera till iCal/Google Calendar
 - [ ] Dela kalenderlänk med familjemedlemmar
 - [ ] Mörkt tema
+- [ ] Flera påminnelsetider (1 dag, 1 timme, 15 min)
 
 ## Licens
 
