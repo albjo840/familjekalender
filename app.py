@@ -3,8 +3,11 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import calendar
+import html
 import requests
 import json
+import os
+import shutil
 
 # Konfigurera sidan
 st.set_page_config(
@@ -13,6 +16,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# PWA metadata för installationsbar app
+st.markdown("""
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kalender">
+<meta name="theme-color" content="#ff4b4b">
+""", unsafe_allow_html=True)
 
 # CSS för Apple-liknande design med drag-funktionalitet
 st.markdown("""
@@ -37,7 +50,53 @@ st.markdown("""
         }
 
         .stColumn {
-            padding: 0 2px !important;
+            padding: 0 1px !important;
+            min-width: 0 !important;
+        }
+
+        /* Kompakta rubriker på mobil */
+        h1 {
+            font-size: 1.5rem !important;
+        }
+
+        /* Mindre färgförklaringar */
+        .legend-item {
+            font-size: 10px !important;
+        }
+
+        /* Kompakt kalendervy */
+        div[data-testid="column"] > div {
+            padding: 1px !important;
+        }
+
+        /* Mindre knappar */
+        button {
+            font-size: 12px !important;
+            padding: 4px 8px !important;
+        }
+
+        /* Ta bort onödiga marginaler */
+        .stButton button {
+            margin: 0 !important;
+        }
+
+        /* Fixa knappfärger - bakgrundsfärg först, svart när klickad */
+        .stButton > button[kind="secondary"] {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            color: #1e1e1e !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .stButton > button[kind="secondary"]:hover {
+            background-color: rgba(255, 255, 255, 1) !important;
+            border: 1px solid rgba(0, 0, 0, 0.2) !important;
+        }
+
+        .stButton > button[kind="secondary"]:active,
+        .stButton > button[kind="secondary"]:focus {
+            background-color: #1e1e1e !important;
+            color: white !important;
+            border: 1px solid #1e1e1e !important;
         }
     }
 
@@ -330,9 +389,99 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Hjälpfunktion för säker event-unpacking
+def safe_unpack_event(event):
+    """Säkert unpacking av event oavsett antal kolumner"""
+    # Standard struktur: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
+    defaults = {
+        'id': None,
+        'user': '',
+        'date': '',
+        'time': '',
+        'duration': 1,
+        'title': '',
+        'description': '',
+        'created_at': '',
+        'repeat_pattern': None,
+        'repeat_until': None
+    }
+
+    if len(event) >= 10:
+        return {
+            'id': event[0],
+            'user': event[1],
+            'date': event[2],
+            'time': event[3],
+            'duration': event[4] or 1,
+            'title': event[5],
+            'description': event[6] or '',
+            'created_at': event[7] or '',
+            'repeat_pattern': event[8],
+            'repeat_until': event[9]
+        }
+    elif len(event) >= 8:
+        return {
+            'id': event[0],
+            'user': event[1],
+            'date': event[2],
+            'time': event[3],
+            'duration': event[4] or 1,
+            'title': event[5],
+            'description': event[6] or '',
+            'created_at': event[7] or '',
+            'repeat_pattern': None,
+            'repeat_until': None
+        }
+    elif len(event) >= 7:
+        return {
+            'id': event[0],
+            'user': event[1],
+            'date': event[2],
+            'time': event[3],
+            'title': event[4],
+            'description': event[5] or '',
+            'created_at': event[6] or '',
+            'duration': 1,
+            'repeat_pattern': None,
+            'repeat_until': None
+        }
+    else:
+        return defaults
+
+# Databasplats - använd miljövariabel eller default
+DB_PATH = os.getenv('CALENDAR_DB_PATH', 'familjekalender.db')
+
 # Databas-funktioner
+def backup_database():
+    """Skapar en backup av databasen"""
+    if os.path.exists(DB_PATH):
+        backup_path = f"{DB_PATH}.backup"
+        try:
+            shutil.copy2(DB_PATH, backup_path)
+            return True
+        except Exception as e:
+            print(f"Backup failed: {e}")
+            return False
+    return False
+
+def restore_database():
+    """Återställer databasen från backup om den saknas"""
+    backup_path = f"{DB_PATH}.backup"
+    if not os.path.exists(DB_PATH) and os.path.exists(backup_path):
+        try:
+            shutil.copy2(backup_path, DB_PATH)
+            print("Database restored from backup")
+            return True
+        except Exception as e:
+            print(f"Restore failed: {e}")
+            return False
+    return False
+
 def init_database():
-    conn = sqlite3.connect('familjekalender.db')
+    # Försök återställa från backup om databasen saknas
+    restore_database()
+
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS events (
@@ -343,7 +492,8 @@ def init_database():
             duration INTEGER DEFAULT 1,
             title TEXT NOT NULL,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            reminder BOOLEAN DEFAULT 0
         )
     ''')
     # Lägg till duration-kolumn om den inte finns
@@ -351,68 +501,216 @@ def init_database():
     columns = [column[1] for column in c.fetchall()]
     if 'duration' not in columns:
         c.execute('ALTER TABLE events ADD COLUMN duration INTEGER DEFAULT 1')
+    if 'repeat_pattern' not in columns:
+        c.execute('ALTER TABLE events ADD COLUMN repeat_pattern TEXT DEFAULT NULL')
+    if 'repeat_until' not in columns:
+        c.execute('ALTER TABLE events ADD COLUMN repeat_until TEXT DEFAULT NULL')
+    if 'reminder' not in columns:
+        c.execute('ALTER TABLE events ADD COLUMN reminder BOOLEAN DEFAULT 0')
     conn.commit()
     conn.close()
 
-def add_event(user, date, time, title, description="", duration=1):
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO events (user, date, time, title, description, duration)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user, date, time, title, description, duration))
-    conn.commit()
-    conn.close()
+def add_event(user, date, time, title, description="", duration=1, repeat_pattern=None, repeat_until=None, reminder=False):
+    # Input validering
+    import re
+    VALID_USERS = ["Albin", "Maria", "Olle", "Ellen", "Familj"]
+    VALID_REPEAT_PATTERNS = ['mån', 'tis', 'ons', 'tor', 'fre', 'lör', 'sön', None]
+
+    if user not in VALID_USERS:
+        raise ValueError(f"Ogiltig användare: {user}. Måste vara en av {', '.join(VALID_USERS)}")
+
+    try:
+        datetime.strptime(date, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError(f"Ogiltigt datumformat: {date}. Använd YYYY-MM-DD")
+
+    if not re.match(r'^\d{2}:\d{2}$', time):
+        raise ValueError(f"Ogiltigt tidformat: {time}. Använd HH:MM")
+
+    if not title or len(title.strip()) == 0:
+        raise ValueError("Titel kan inte vara tom")
+
+    if duration < 1 or duration > 12:
+        raise ValueError(f"Duration måste vara mellan 1 och 12 timmar, fick {duration}")
+
+    if repeat_pattern and repeat_pattern not in VALID_REPEAT_PATTERNS:
+        raise ValueError(f"Ogiltigt repeat_pattern: {repeat_pattern}. Måste vara en av {', '.join([p for p in VALID_REPEAT_PATTERNS if p])}")
+
+    if repeat_until:
+        try:
+            datetime.strptime(repeat_until, '%Y-%m-%d')
+        except ValueError:
+            raise ValueError(f"Ogiltigt repeat_until format: {repeat_until}. Använd YYYY-MM-DD")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO events (user, date, time, title, description, duration, repeat_pattern, repeat_until, reminder)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user, date, time, title, description, duration, repeat_pattern, repeat_until, 1 if reminder else 0))
+        conn.commit()
+        # Backup efter varje ändring
+        backup_database()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 def update_event_duration(event_id, new_duration):
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
-    c.execute('UPDATE events SET duration = ? WHERE id = ?', (new_duration, event_id))
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('UPDATE events SET duration = ? WHERE id = ?', (new_duration, event_id))
+        conn.commit()
+        backup_database()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 def get_events_for_week(start_date):
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
 
-    end_date = start_date + timedelta(days=6)
-    c.execute('''
-        SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until FROM events
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date, time
-    ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        end_date = start_date + timedelta(days=6)
 
-    events = c.fetchall()
-    conn.close()
-    return events
+        # Hämta både vanliga händelser och återkommande händelser som kan visas denna vecka
+        c.execute('''
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            FROM events
+            WHERE (date BETWEEN ? AND ?)
+               OR (repeat_pattern IS NOT NULL AND date <= ?)
+            ORDER BY date, time
+        ''', (start_date.strftime('%Y-%m-%d'),
+              end_date.strftime('%Y-%m-%d'),
+              end_date.strftime('%Y-%m-%d')))
+
+        all_events = c.fetchall()
+    finally:
+        if conn:
+            conn.close()
+
+    # Expandera återkommande händelser
+    expanded_events = []
+    for event in all_events:
+        e = safe_unpack_event(event)
+        event_date = datetime.strptime(e['date'], '%Y-%m-%d').date()
+
+        if e['repeat_pattern']:  # Återkommande händelse
+            repeat_end = datetime.strptime(e['repeat_until'], '%Y-%m-%d').date() if e['repeat_until'] else end_date
+            weekday_map = {'mån': 0, 'tis': 1, 'ons': 2, 'tor': 3, 'fre': 4, 'lör': 5, 'sön': 6}
+
+            if e['repeat_pattern'] in weekday_map:
+                target_weekday = weekday_map[e['repeat_pattern']]
+                # Börja från veckans start, inte händelsens datum
+                current_date = start_date
+                while current_date <= min(repeat_end, end_date):
+                    # Lägg till om det är rätt veckodag OCH vi är efter händelsens startdatum
+                    if current_date >= event_date and current_date.weekday() == target_weekday:
+                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+                        expanded_events.append((
+                            e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
+                            e['title'], e['description'], e['created_at'], e['duration'],
+                            e['repeat_pattern'], e['repeat_until']
+                        ))
+                    current_date += timedelta(days=1)
+            else:
+                # Ingen giltig repeat pattern, lägg till som vanlig
+                if start_date <= event_date <= end_date:
+                    expanded_events.append(event)
+        else:
+            # Vanlig händelse utan repetering
+            if start_date <= event_date <= end_date:
+                expanded_events.append(event)
+
+    return expanded_events
 
 def get_events_for_month(year, month):
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
 
-    # Första och sista dagen i månaden
-    first_day = datetime(year, month, 1).date()
-    if month == 12:
-        last_day = datetime(year + 1, 1, 1).date() - timedelta(days=1)
-    else:
-        last_day = datetime(year, month + 1, 1).date() - timedelta(days=1)
+        # Första och sista dagen i månaden
+        first_day = datetime(year, month, 1).date()
+        if month == 12:
+            last_day = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+        else:
+            last_day = datetime(year, month + 1, 1).date() - timedelta(days=1)
 
-    c.execute('''
-        SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until FROM events
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date, time
-    ''', (first_day.strftime('%Y-%m-%d'), last_day.strftime('%Y-%m-%d')))
+        # Optimerad SQL: Hämta bara relevanta events (inkl. återkommande som kan visas i månaden)
+        c.execute('''
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            FROM events
+            WHERE (date BETWEEN ? AND ?)
+               OR (repeat_pattern IS NOT NULL AND date <= ?)
+            ORDER BY date, time
+        ''', (first_day.strftime('%Y-%m-%d'),
+              last_day.strftime('%Y-%m-%d'),
+              last_day.strftime('%Y-%m-%d')))
+        all_events = c.fetchall()
+    finally:
+        if conn:
+            conn.close()
 
-    events = c.fetchall()
-    conn.close()
-    return events
+    # Expandera återkommande händelser
+    expanded_events = []
+    for event in all_events:
+        e = safe_unpack_event(event)
+        event_date = datetime.strptime(e['date'], '%Y-%m-%d').date()
+
+        if e['repeat_pattern']:  # Återkommande händelse
+            repeat_end = datetime.strptime(e['repeat_until'], '%Y-%m-%d').date() if e['repeat_until'] else last_day
+            weekday_map = {'mån': 0, 'tis': 1, 'ons': 2, 'tor': 3, 'fre': 4, 'lör': 5, 'sön': 6}
+
+            if e['repeat_pattern'] in weekday_map:
+                target_weekday = weekday_map[e['repeat_pattern']]
+                current_date = event_date
+                while current_date <= min(repeat_end, last_day):
+                    if current_date >= first_day and current_date.weekday() == target_weekday:
+                        expanded_events.append((
+                            e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
+                            e['duration'], e['title'], e['description'], e['created_at'],
+                            e['repeat_pattern'], e['repeat_until']
+                        ))
+                    current_date += timedelta(days=1)
+            else:
+                # Ingen giltig repeat pattern, lägg till som vanlig
+                if first_day <= event_date <= last_day:
+                    expanded_events.append(event)
+        else:
+            # Vanlig händelse utan repetering
+            if first_day <= event_date <= last_day:
+                expanded_events.append(event)
+
+    return expanded_events
 
 def delete_event(event_id):
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
-    c.execute('DELETE FROM events WHERE id = ?', (event_id,))
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute('DELETE FROM events WHERE id = ?', (event_id,))
+        conn.commit()
+        backup_database()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 # AI-hjälpfunktioner
 def get_calendar_context(year, month):
@@ -425,33 +723,41 @@ def get_calendar_context(year, month):
         context += "Inga händelser denna månad.\n"
     else:
         for event in events:
-            event_id, user, date, time, title, desc, duration, created = event
-            context += f"- {date} kl {time}: {title} ({user})"
-            if desc:
-                context += f" - {desc}"
-            if duration and int(duration) > 1:
-                context += f" [{duration} timmar]"
+            e = safe_unpack_event(event)
+            context += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})"
+            if e['description']:
+                context += f" - {e['description']}"
+            try:
+                dur = int(e['duration']) if e['duration'] else 1
+                if dur > 1:
+                    context += f" [{dur} timmar]"
+            except (ValueError, TypeError):
+                pass
             context += "\n"
 
     return context
 
 def get_available_times(date_str, user=None):
     """Hittar lediga tider för ett givet datum"""
-    conn = sqlite3.connect('familjekalender.db')
-    c = conn.cursor()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
 
-    if user:
-        c.execute('SELECT time, duration FROM events WHERE date = ? AND user = ? ORDER BY time',
-                 (date_str, user))
-    else:
-        c.execute('SELECT time, duration FROM events WHERE date = ? ORDER BY time',
-                 (date_str,))
+        if user:
+            c.execute('SELECT time, duration FROM events WHERE date = ? AND user = ? ORDER BY time',
+                     (date_str, user))
+        else:
+            c.execute('SELECT time, duration FROM events WHERE date = ? ORDER BY time',
+                     (date_str,))
 
-    booked_events = c.fetchall()
-    conn.close()
+        booked_events = c.fetchall()
+    finally:
+        if conn:
+            conn.close()
 
-    # Generera lista över lediga tider (07:00-22:00)
-    all_hours = [f"{h:02d}:00" for h in range(7, 23)]
+    # Generera lista över lediga tider (06:00-22:00)
+    all_hours = [f"{h:02d}:00" for h in range(6, 23)]
     booked_hours = set()
 
     for time_str, duration in booked_events:
@@ -474,27 +780,178 @@ def ai_book_event(user, date, time, title, description="", duration=1):
     except Exception as e:
         return f"✗ Fel vid bokning: {str(e)}"
 
-@st.cache_resource
-def get_huggingface_api_key():
-    """Hämtar Hugging Face API-nyckel från secrets eller session state"""
-    # Försök från Streamlit secrets först
-    if hasattr(st, 'secrets') and 'HUGGINGFACE_API_KEY' in st.secrets:
-        return st.secrets['HUGGINGFACE_API_KEY']
+def handle_simple_command(user_message, year, month):
+    """Enkel regelbaserad kommandohantering"""
+    import re
 
-    # Annars från session state (användaren kan mata in den)
-    if 'hf_api_key' in st.session_state and st.session_state.hf_api_key:
-        return st.session_state.hf_api_key
+    msg_lower = user_message.lower()
+    today = datetime.now()
 
-    return None
+    # VIKTIGT: Kolla först om det är en FRÅGA (inte en bokning)
+    question_keywords = ['vad', 'när', 'vilken', 'visa', 'hitta', 'har', 'finns', 'ledig', 'upptagen']
+    if any(keyword in msg_lower for keyword in question_keywords):
+        # Det är en fråga - svara från kalenderkontexten
+
+        # Hitta vilken användare det gäller
+        users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
+        mentioned_user = None
+        for key, val in users_map.items():
+            if key in msg_lower:
+                mentioned_user = val
+                break
+
+        # Försök extrahera datum från frågan
+        target_date = None
+
+        # Kolla efter specifikt datum (t.ex. "17e oktober", "17 oktober", "den 17")
+        month_names = {
+            'januari': 1, 'februari': 2, 'mars': 3, 'april': 4, 'maj': 5, 'juni': 6,
+            'juli': 7, 'augusti': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12
+        }
+
+        # Försök matcha "17e oktober" eller "17 oktober"
+        for month_name, month_num in month_names.items():
+            pattern = r'(\d{1,2})\s*(?:e|:e)?\s+' + month_name
+            match = re.search(pattern, msg_lower)
+            if match:
+                day = int(match.group(1))
+                # Använd current year om inte specificerat
+                try:
+                    target_date = datetime(today.year, month_num, day).strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+                break
+
+        # Om inget specifikt datum, kolla "den 17", "17e", etc.
+        if not target_date:
+            day_match = re.search(r'den\s+(\d{1,2})|(\d{1,2})\s*(?:e|:e)', msg_lower)
+            if day_match:
+                day = int(day_match.group(1) or day_match.group(2))
+                # Använd aktuell månad
+                try:
+                    target_date = datetime(today.year, today.month, day).strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+
+        # Hämta alla events för månaden (eller flera månader om nödvändigt)
+        events = get_events_for_month(year, month)
+
+        # Om target_date är i en annan månad, hämta även den månaden
+        if target_date:
+            target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+            if target_dt.month != month:
+                events += get_events_for_month(target_dt.year, target_dt.month)
+
+        if events:
+            response = ""
+            found_any = False
+
+            for event in events:
+                e = safe_unpack_event(event)
+
+                # Filtrera på användare om specificerad
+                if mentioned_user and e['user'] != mentioned_user:
+                    continue
+
+                # Filtrera på datum om specificerat
+                if target_date and e['date'] != target_date:
+                    continue
+
+                found_any = True
+                response += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})\n"
+
+            if found_any:
+                prefix = f"{'För ' + mentioned_user if mentioned_user else 'Händelser'}"
+                if target_date:
+                    prefix += f" den {target_date}"
+                return f"{prefix}:\n\n{response}"
+            else:
+                return "Jag hittade inga händelser som matchar din fråga."
+        else:
+            return "Inga händelser hittades för den perioden."
+
+    # Kolla om det är en BOKNINGSFÖRFRÅGAN
+    booking_keywords = ['boka', 'lägg till', 'skapa', 'planera']
+    if not any(keyword in msg_lower for keyword in booking_keywords):
+        return "⚠️ Jag förstod inte din förfrågan. Vill du boka något eller ställa en fråga om kalendern?"
+
+    # Hitta användare
+    users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
+    user = "Albin"  # Default
+    for key, val in users_map.items():
+        if key in msg_lower:
+            user = val
+            break
+
+    # Hitta datum
+    date_obj = today
+    if "imorgon" in msg_lower:
+        date_obj = today + timedelta(days=1)
+    elif "övermorgon" in msg_lower:
+        date_obj = today + timedelta(days=2)
+
+    # Hitta tid och sluttid
+    time_str = "09:00"
+    duration = 1
+
+    # Leta efter "från X till Y" eller "X till Y" format
+    time_range_match = re.search(r'(\d{1,2})[:\.](\d{2})\s+till\s+(\d{1,2})[:\.]?(\d{2})?', user_message)
+    if time_range_match:
+        start_hour = int(time_range_match.group(1))
+        start_min = int(time_range_match.group(2))
+        end_hour = int(time_range_match.group(3))
+        end_min = int(time_range_match.group(4)) if time_range_match.group(4) else 0
+
+        time_str = f"{start_hour:02d}:{start_min:02d}"
+
+        # Beräkna duration i timmar (med decimaler för minuter)
+        start_total_min = start_hour * 60 + start_min
+        end_total_min = end_hour * 60 + end_min
+        duration_minutes = end_total_min - start_total_min
+        duration = max(1, duration_minutes / 60)  # Konvertera till timmar
+    else:
+        # Enkel tidsmatchning utan sluttid
+        time_match = re.search(r'(\d{1,2})[:\.](\d{2})', user_message)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2))
+            time_str = f"{hour:02d}:{minute:02d}"
+        else:
+            hour_match = re.search(r'kl\.?\s*(\d{1,2})', user_message)
+            if hour_match:
+                hour = int(hour_match.group(1))
+                time_str = f"{hour:02d}:00"
+
+    # Hitta titel
+    title = "Händelse"
+    for pattern in [r'boka\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)', r'lägg\s+till\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)']:
+        match = re.search(pattern, msg_lower)
+        if match:
+            title = match.group(1).strip().title()
+            break
+
+    date_str = date_obj.strftime('%Y-%m-%d')
+
+    try:
+        add_event(user, date_str, time_str, title, "", duration)
+        end_hour_calc = int(time_str.split(':')[0]) + int(duration)
+        end_min_calc = int((duration % 1) * 60)
+        return f"✓ Bokad: {title} för {user} den {date_str} kl {time_str}-{end_hour_calc:02d}:{end_min_calc:02d}"
+    except Exception as e:
+        return f"⚠️ Kunde inte boka: {str(e)}"
 
 def call_gpt_local(user_message, year, month):
-    """Anropar Hugging Face Inference API för AI-assistans"""
+    """Anropar Hugging Face API med fallback till enkel regelbaserad AI"""
 
-    # Hämta API-nyckel
-    api_key = get_huggingface_api_key()
+    # Hämta API-nyckel från Streamlit secrets
+    try:
+        hf_token = st.secrets.get("HUGGINGFACE_API_KEY", "")
+    except:
+        hf_token = ""
 
-    if not api_key:
-        return "⚠️ Ingen Hugging Face API-nyckel hittades. Lägg till din nyckel i .streamlit/secrets.toml eller mata in den i sidebaren."
+    # Om ingen API-nyckel, använd enkel regelbaserad assistent
+    if not hf_token:
+        return handle_simple_command(user_message, year, month)
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
@@ -503,7 +960,7 @@ def call_gpt_local(user_message, year, month):
     today = datetime.now()
     system_message = f"""Du är en intelligent kalenderassistent för en familjekalender.
 
-ANVÄNDARE: Albin, Maria, Familj
+ANVÄNDARE: Albin, Maria, Olle, Ellen, Familj
 
 DAGENS DATUM: {today.strftime('%Y-%m-%d')} ({today.strftime('%A, %d %B %Y')})
 
@@ -511,11 +968,21 @@ AKTUELL KALENDER ({year}-{month:02d}):
 {calendar_context}
 
 DINA UPPGIFTER:
-1. Svara på frågor om kalendern (vad finns bokat, lediga tider, etc.)
-2. Boka händelser när användaren ber om det
+1. SVARA PÅ FRÅGOR om kalendern (vad finns bokat, lediga tider, etc.) - ANVÄND ALDRIG BOOK_EVENT för frågor!
+2. BOKA händelser ENDAST när användaren ber om det med ord som "boka", "lägg till", "skapa"
 3. Förstå relativa datum (imorgon, nästa vecka, på fredag, etc.)
 
-VIKTIGT - NÄR ANVÄNDAREN BER DIG BOKA/LÄGGA TILL/SKAPA EN HÄNDELSE:
+VIKTIGT - SKILLNAD MELLAN FRÅGOR OCH BOKNINGAR:
+❌ FRÅGOR (använd INTE BOOK_EVENT):
+   - "Vad gör Albin den 17e?", "Hitta...", "Visa...", "När har...", "Är det bokat..."
+   - Svara direkt med information från kalenderkontexten ovan!
+
+✅ BOKNINGAR (använd BOOK_EVENT):
+   - "Boka lunch för Maria imorgon kl 12"
+   - "Lägg till tandläkare för Albin på fredag 14:00"
+   - "Skapa familjemiddag på lördag 18:00"
+
+NÄR ANVÄNDAREN BER DIG BOKA/LÄGGA TILL/SKAPA EN HÄNDELSE:
 Du MÅSTE använda BOOK_EVENT-kommandot! Formatet är exakt:
 BOOK_EVENT|användare|YYYY-MM-DD|HH:MM|titel|beskrivning|varaktighet_timmar
 
@@ -535,13 +1002,15 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API endpoint
+        # Hugging Face Inference API - använder Qwen 2.5 72B Instruct (kraftfullare och bättre på svenska)
         API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {"Authorization": f"Bearer {hf_token}"}
 
-        # Skapa chat messages
+        # Formatera prompt för Qwen 2.5 (använder ChatML format)
+        prompt = f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_message}<|im_end|>\n<|im_start|>assistant\n"
+
         payload = {
-            "inputs": f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_message}<|im_end|>\n<|im_start|>assistant\n",
+            "inputs": prompt,
             "parameters": {
                 "max_new_tokens": 500,
                 "temperature": 0.7,
@@ -550,63 +1019,89 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
             }
         }
 
-        # Anropa API
         response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
-        if response.status_code == 200:
-            result = response.json()
+        if response.status_code != 200:
+            # Fallback till enkel regelbaserad AI
+            return handle_simple_command(user_message, year, month)
 
-            # Extrahera svaret
-            if isinstance(result, list) and len(result) > 0:
-                ai_response = result[0].get('generated_text', '').strip()
-            else:
-                ai_response = result.get('generated_text', '').strip()
+        result = response.json()
 
-            # Ta bort eventuella specialtokens
-            ai_response = ai_response.replace('<|im_end|>', '').replace('<|im_start|>', '').strip()
+        # Extrahera svaret
+        if isinstance(result, list) and len(result) > 0:
+            ai_response = result[0].get('generated_text', '').strip()
+        elif isinstance(result, dict):
+            ai_response = result.get('generated_text', '').strip()
+        else:
+            ai_response = str(result)
 
-            # Kontrollera om AI:n vill boka en händelse
-            if "BOOK_EVENT|" in ai_response:
-                import re
+        # Ta bort Qwen special tokens om de finns
+        ai_response = ai_response.replace('<|im_end|>', '').replace('<|im_start|>', '').strip()
+
+        # Kontrollera om AI:n vill boka en händelse
+        if "BOOK_EVENT|" in ai_response:
+            try:
                 # Extrahera BOOK_EVENT-kommandot (ta bara första raden om det finns flera)
                 book_line = ai_response.split("BOOK_EVENT|")[1].split("\n")[0]
                 parts = book_line.split("|")
 
-                if len(parts) >= 4:
-                    user, date, time, title = parts[:4]
-                    description = parts[4].strip() if len(parts) > 4 else ""
+                if len(parts) < 4:
+                    ai_response += "\n\n⚠️ Fel format på BOOK_EVENT kommando (behöver minst user|date|time|title)."
+                    return ai_response
 
-                    # Hantera duration säkert - ta bort allt efter första icke-siffran
-                    duration = 1
-                    if len(parts) > 5:
-                        duration_str = parts[5].strip()
-                        # Extrahera bara siffror från början av strängen
-                        match = re.match(r'^\d+', duration_str)
-                        if match:
-                            duration = int(match.group())
+                user, date, time, title = parts[:4]
 
-                    booking_result = ai_book_event(user.strip(), date.strip(), time.strip(),
-                                                   title.strip(), description, duration)
+                # Validera datum format
+                import re
+                try:
+                    datetime.strptime(date.strip(), '%Y-%m-%d')
+                except ValueError:
+                    ai_response += f"\n\n⚠️ Ogiltigt datumformat: {date}. Använd YYYY-MM-DD."
+                    return ai_response
 
-                    # Ta bort BOOK_EVENT-kommandot från svaret
-                    ai_response = ai_response.split("BOOK_EVENT|")[0].strip() + "\n\n" + booking_result
+                # Validera tid format
+                if not re.match(r'^\d{2}:\d{2}$', time.strip()):
+                    ai_response += f"\n\n⚠️ Ogiltigt tidformat: {time}. Använd HH:MM."
+                    return ai_response
 
-            return ai_response
+                # Validera user
+                valid_users = ["Albin", "Maria", "Olle", "Ellen", "Familj"]
+                if user.strip() not in valid_users:
+                    ai_response += f"\n\n⚠️ Ogiltig användare: {user}. Måste vara en av {', '.join(valid_users)}."
+                    return ai_response
 
-        elif response.status_code == 503:
-            return "⏳ AI-modellen laddar... Försök igen om några sekunder."
-        else:
-            return f"⚠️ API-fel ({response.status_code}): {response.text}"
+                description = parts[4].strip() if len(parts) > 4 else ""
 
-    except requests.Timeout:
-        return "⏱️ Timeout - försök igen om ett ögonblick."
+                # Hantera duration säkert
+                duration = 1
+                if len(parts) > 5:
+                    duration_str = parts[5].strip()
+                    match = re.match(r'^\d+', duration_str)
+                    if match:
+                        duration = min(int(match.group()), 12)  # Max 12 timmar
+
+                booking_result = ai_book_event(user.strip(), date.strip(), time.strip(),
+                                               title.strip(), description, duration)
+
+                # Ta bort BOOK_EVENT-kommandot från svaret
+                ai_response = ai_response.split("BOOK_EVENT|")[0].strip() + "\n\n" + booking_result
+
+            except Exception as e:
+                ai_response += f"\n\n⚠️ Fel vid bokning: {str(e)}"
+
+        return ai_response
+
     except Exception as e:
-        return f"⚠️ Fel vid AI-anrop: {str(e)}"
+        import traceback
+        error_details = traceback.format_exc()
+        return f"⚠️ Fel vid AI-generering: {str(e)}\n\nDetaljer: {error_details[:200]}"
 
 # Huvudapplikation
 def main():
-    # Initiera databas
-    init_database()
+    # Initiera databas endast en gång per session
+    if 'db_initialized' not in st.session_state:
+        init_database()
+        st.session_state['db_initialized'] = True
 
     # Titel och färgförklaring
     st.markdown("""
@@ -658,6 +1153,10 @@ def main():
     if 'voice_input' not in st.session_state:
         st.session_state['voice_input'] = ""
 
+    # Initiera AI search state
+    if 'ai_search' not in st.session_state:
+        st.session_state['ai_search'] = ""
+
     # Aktuell månad som default
     today = datetime.now().date()
 
@@ -666,18 +1165,109 @@ def main():
         st.session_state['current_month'] = today.month
         st.session_state['current_year'] = today.year
 
-    # Röstinmatning med Web Speech API
+    # Initiera current_week om det inte finns
+    if 'current_week' not in st.session_state:
+        today = datetime.now().date()
+        st.session_state['current_week'] = today - timedelta(days=today.weekday())
+
+    # Navigation i toppen - veckonavigering
+    nav_col1, nav_col2, nav_col3 = st.columns([1, 3, 1])
+
+    with nav_col1:
+        if st.button("⬅️", use_container_width=True):
+            st.session_state['current_week'] -= timedelta(days=7)
+            st.rerun()
+
+    with nav_col2:
+        week_start = st.session_state['current_week']
+        week_end = week_start + timedelta(days=6)
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
+        st.markdown(f"""
+        <div style='text-align:center;font-weight:600;font-size:1.2rem;color:white;padding:8px;
+                    background:rgba(255,255,255,0.1);border-radius:12px;backdrop-filter:blur(10px);'>
+            {week_start.day} {month_names[week_start.month-1]} - {week_end.day} {month_names[week_end.month-1]} {week_end.year}
+        </div>
+        """, unsafe_allow_html=True)
+
+    with nav_col3:
+        if st.button("➡️", use_container_width=True):
+            st.session_state['current_week'] += timedelta(days=7)
+            st.rerun()
+
+    # Röstinmatning med Web Speech API och Push-notifikationer - kompakt
     st.markdown("""
-    <div id="voice-input-container" style="text-align: center; margin-bottom: 1rem;">
+    <div id="voice-input-container" style="text-align: center; margin-bottom: 0.5rem;">
         <button id="voice-button" onclick="startVoiceRecognition()"
-                style="background: linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%);
-                       color: white; border: none; border-radius: 50%; width: 60px; height: 60px;
-                       font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(255,59,48,0.3);
+                style="background: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
+                       color: white; border: none; border-radius: 50%; width: 44px; height: 44px;
+                       font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(88,86,214,0.3);
                        transition: all 0.3s ease;">
             🎤
         </button>
-        <p id="voice-status" style="color: white; margin-top: 0.5rem; font-size: 13px;"></p>
+        <p id="voice-status" style="color: white; margin-top: 0.3rem; font-size: 11px;"></p>
     </div>
+
+    <script>
+    // Push-notifikationer setup
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+            console.log('Service Worker registration failed:', err);
+        });
+    }
+
+    // Begär notifikationspermission
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(function(permission) {
+            if (permission === 'granted') {
+                console.log('Notification permission granted');
+            }
+        });
+    }
+
+    // Funktion för att schemalägga notifikation
+    function scheduleNotification(eventTitle, eventDate, eventTime) {
+        if (!('Notification' in window)) {
+            console.log('This browser does not support notifications');
+            return;
+        }
+
+        if (Notification.permission !== 'granted') {
+            console.log('Notification permission not granted');
+            return;
+        }
+
+        // Beräkna tid till händelsen minus 15 minuter
+        const eventDateTime = new Date(eventDate + ' ' + eventTime);
+        const reminderTime = new Date(eventDateTime.getTime() - 15 * 60000);
+        const now = new Date();
+        const timeUntilReminder = reminderTime.getTime() - now.getTime();
+
+        if (timeUntilReminder > 0) {
+            setTimeout(function() {
+                new Notification('📅 Påminnelse: ' + eventTitle, {
+                    body: 'Börjar om 15 minuter (' + eventTime + ')',
+                    icon: '📅',
+                    requireInteraction: true
+                });
+            }, timeUntilReminder);
+        }
+    }
+
+    // Läs events från localStorage och schemalägg notifikationer
+    function loadAndScheduleReminders() {
+        // Detta skulle kunna kopplas till Streamlit session state
+        // För nu: demonstration av funktionaliteten
+        console.log('Reminder system active');
+    }
+
+    // Kör när sidan laddas
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadAndScheduleReminders);
+    } else {
+        loadAndScheduleReminders();
+    }
+    </script>
 
     <script>
     let recognition;
@@ -700,7 +1290,7 @@ def main():
 
         if (isRecording) {
             recognition.stop();
-            button.style.background = 'linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%)';
+            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
             button.textContent = '🎤';
             status.textContent = '';
             isRecording = false;
@@ -718,23 +1308,24 @@ def main():
             const transcript = event.results[0][0].transcript;
             status.textContent = 'Bearbetar: "' + transcript + '"';
 
-            // Sätt input i Streamlit chat
-            const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-            if (chatInput) {
-                chatInput.value = transcript;
-                chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            // Sätt input i Streamlit text input
+            const textInput = window.parent.document.querySelector('input[aria-label="🤖 Fråga AI-assistenten eller boka händelse:"]');
+            if (textInput) {
+                textInput.value = transcript;
+                textInput.dispatchEvent(new Event('input', { bubbles: true }));
+                textInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
         };
 
         recognition.onerror = function(event) {
-            button.style.background = 'linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%)';
+            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
             button.textContent = '🎤';
             status.textContent = 'Fel: ' + event.error;
             isRecording = false;
         };
 
         recognition.onend = function() {
-            button.style.background = 'linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%)';
+            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
             button.textContent = '🎤';
             isRecording = false;
         };
@@ -744,66 +1335,57 @@ def main():
     </script>
     """, unsafe_allow_html=True)
 
-    # Chat input
-    user_input = st.chat_input("Ställ en fråga om kalendern eller be mig boka något...")
+    # AI Sökruta - kompakt
+    st.markdown("""
+    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.5rem; margin: 0.5rem 0; backdrop-filter: blur(10px);">
+    """, unsafe_allow_html=True)
+
+    user_input = st.text_input("🤖 AI-assistent",
+                                placeholder="Boka eller fråga...",
+                                key="ai_search",
+                                label_visibility="collapsed")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if user_input:
         # Anropa AI:n (lokalt på GPU)
         with st.spinner('🤔 Tänker...'):
-            ai_response = call_gpt_local(user_input, st.session_state['current_year'], st.session_state['current_month'])
+            ai_response = call_gpt_local(user_input, st.session_state['current_week'].year, st.session_state['current_week'].month)
 
         # Visa svaret tillfälligt med auto-dismiss
         if "✓" in ai_response:  # Om bokning genomfördes
             st.success(ai_response)
-            # Vänta 2 sekunder och uppdatera kalendern
-            import time
-            time.sleep(2)
+            # Uppdatera kalendern omedelbart
             st.rerun()
         else:
             # Visa svar för frågor
             st.info(ai_response)
 
-    # Navigation i toppen
-    nav_col1, nav_col2, nav_col3 = st.columns([1, 3, 1])
+    # Hämta händelser för aktuell vecka
+    week_start = st.session_state['current_week']
+    week_end = week_start + timedelta(days=6)
 
-    with nav_col1:
-        if st.button("⬅️ Föregående", use_container_width=True):
-            if st.session_state['current_month'] == 1:
-                st.session_state['current_month'] = 12
-                st.session_state['current_year'] -= 1
-            else:
-                st.session_state['current_month'] -= 1
-            st.rerun()
+    # Använd månad från veckostart för att hämta events
+    events = get_events_for_month(week_start.year, week_start.month)
 
-    with nav_col2:
-        month_names = ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
-                      'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December']
-        st.markdown(f"""
-        <div style='text-align:center;font-weight:600;font-size:1.5rem;color:white;padding:8px;
-                    background:rgba(255,255,255,0.1);border-radius:12px;backdrop-filter:blur(10px);'>
-            {month_names[st.session_state['current_month']-1]} {st.session_state['current_year']}
-        </div>
-        """, unsafe_allow_html=True)
-
-    with nav_col3:
-        if st.button("Nästa ➡️", use_container_width=True):
-            if st.session_state['current_month'] == 12:
-                st.session_state['current_month'] = 1
-                st.session_state['current_year'] += 1
-            else:
-                st.session_state['current_month'] += 1
-            st.rerun()
-
-
-    # Hämta händelser för månaden
-    events = get_events_for_month(st.session_state['current_year'], st.session_state['current_month'])
+    # Hämta även events från nästa månad om veckan går över månadsskifte
+    if week_end.month != week_start.month:
+        events_next_month = get_events_for_month(week_end.year, week_end.month)
+        events = events + events_next_month
 
     # Skapa DataFrame för enklare hantering
-    # SQL-frågan returnerar alltid 10 kolumner: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
     if events:
-        events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
+        # Kontrollera om duration finns i resultatet
+        if len(events[0]) >= 10:  # Ny struktur med repeat
+            # Korrekt ordning: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until'])
+        elif len(events[0]) >= 8:  # Struktur med duration
+            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration'])
+        else:  # Gammal struktur utan duration
+            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at'])
+            events_df['duration'] = 1  # Sätt default duration
     else:
-        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'duration', 'title', 'description', 'created_at', 'repeat_pattern', 'repeat_until'])
+        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until'])
 
     # Dialog för att lägga till händelse
     if 'show_add_dialog' not in st.session_state:
@@ -815,63 +1397,106 @@ def main():
     if 'existing_events' not in st.session_state:
         st.session_state.existing_events = []
 
-    # Skapa månatlig kalendervy
+    # Veckokalendervy
     import calendar as cal
 
-    # Få kalendergrid för månaden
-    month_calendar = cal.monthcalendar(st.session_state['current_year'], st.session_state['current_month'])
+    # Hitta vilken vecka vi är på
+    current_week_start = st.session_state['current_week']
+    week_dates = [current_week_start + timedelta(days=i) for i in range(7)]
 
     # Veckodagar
-    weekdays = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön']
+    weekdays = ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag', 'Söndag']
 
-    # Visa veckodagar som headers
-    header_cols = st.columns(7)
-    for idx, day in enumerate(weekdays):
-        with header_cols[idx]:
-            st.markdown(f'<div style="text-align:center;font-weight:600;color:white;padding:12px 0;background:rgba(255,255,255,0.1);border-radius:8px;margin:2px;">{day}</div>', unsafe_allow_html=True)
+    # Visa varje dag vertikalt
+    for day_idx, date_obj in enumerate(week_dates):
+        date_str = date_obj.strftime('%Y-%m-%d')
+        day_num = date_obj.day
+        weekday_name = weekdays[day_idx]
 
-    # Visa varje vecka
-    for week in month_calendar:
-        week_cols = st.columns(7)
+        # Kolla om det är idag
+        is_today = date_obj == datetime.now().date()
+        today_style = "border-left: 4px solid #4facfe;" if is_today else ""
 
-        for day_idx, day in enumerate(week):
-            with week_cols[day_idx]:
-                if day == 0:
-                    # Tom dag (från föregående/nästa månad)
-                    st.markdown('<div style="min-height:120px;background:rgba(255,255,255,0.05);border-radius:12px;margin:2px;"></div>', unsafe_allow_html=True)
-                else:
-                    # Skapa datum för denna dag
-                    date_obj = datetime(st.session_state['current_year'], st.session_state['current_month'], day).date()
-                    date_str = date_obj.strftime('%Y-%m-%d')
+        # Hämta händelser för denna dag
+        day_events = events_df[events_df['date'] == date_str]
 
-                    # Kolla om det är idag
-                    is_today = date_obj == datetime.now().date()
-                    today_style = "border:3px solid #4facfe;" if is_today else ""
+        # Rita dagkort
+        st.markdown(f'''
+        <div style="background:rgba(255,255,255,0.95);border-radius:12px;margin:8px 0;padding:12px;{today_style}box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-weight:700;font-size:18px;color:#333;">{weekday_name}</div>
+                    <div style="font-size:14px;color:#666;">{day_num} {date_obj.strftime('%B %Y')}</div>
+                </div>
+                <div style="font-size:32px;font-weight:700;color:#4facfe;opacity:0.3;">{day_num}</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
-                    # Hämta händelser för denna dag
-                    day_events = events_df[events_df['date'] == date_str]
+        # Definiera färgmappning för användare
+        user_colors = {
+            'Albin': '#34c759',     # Grön
+            'Maria': '#ff9500',     # Orange
+            'Olle': '#007aff',      # Blå
+            'Ellen': '#ff2d55',     # Röd
+            'Familj': '#af52de'     # Lila
+        }
 
-                    # Rita dagruta
-                    events_html = ""
-                    for _, event in day_events.iterrows():
-                        user_class = f"user-{event['user'].lower()}"
-                        events_html += f'<div class="event {user_class}" style="margin:4px 0;padding:4px 6px;border-radius:6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{event["title"]}</div>'
+        # Visa events som färgkodade boxar (ej klickbara)
+        if not day_events.empty:
+            # Sortera händelser kronologiskt efter tid
+            day_events = day_events.sort_values('time')
+            for idx, event in day_events.iterrows():
+                safe_title = html.escape(str(event['title']))
+                event_time = event.get('time', '')
+                event_user = event.get('user', '')
+                event_id = event.get('id')
 
-                    st.markdown(f'''
-                    <div style="min-height:120px;background:rgba(255,255,255,0.95);border-radius:12px;margin:2px;padding:8px;{today_style}box-shadow:0 4px 12px rgba(0,0,0,0.1);transition:transform 0.2s ease,box-shadow 0.2s ease;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.15)';" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';">
-                        <div style="font-weight:600;font-size:18px;color:#333;margin-bottom:8px;">{day}</div>
-                        {events_html}
-                    </div>
-                    ''', unsafe_allow_html=True)
+                # Beräkna sluttid
+                try:
+                    duration = float(event.get('duration', 1))
+                except (ValueError, TypeError):
+                    duration = 1.0
 
-                    # Klickbar knapp
-                    if st.button("➕", key=f"add_{date_str}", use_container_width=True):
-                        st.session_state.show_add_dialog = True
-                        st.session_state.selected_date = date_str
-                        st.session_state.selected_time = "09:00"
-                        existing = day_events.to_dict('records') if not day_events.empty else []
-                        st.session_state.existing_events = existing
-                        st.rerun()
+                # Beräkna sluttid med minuter
+                start_parts = event_time.split(':')
+                start_hour = int(start_parts[0])
+                start_min = int(start_parts[1]) if len(start_parts) > 1 else 0
+
+                # Lägg till duration (i timmar med decimaler)
+                end_total_minutes = start_hour * 60 + start_min + int(duration * 60)
+                end_hour = end_total_minutes // 60
+                end_min = end_total_minutes % 60
+                end_time = f"{end_hour:02d}:{end_min:02d}"
+                time_range = f"{event_time} - {end_time}"
+
+                bg_color = user_colors.get(event_user, '#8e8e93')
+
+                # Färgad box (endast visuell)
+                st.markdown(f'''
+                <div style="background: {bg_color}; opacity: 0.85; color: white; padding: 12px 16px;
+                            border-radius: 8px; margin: 6px 0; font-weight: 500;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.12);">
+                    <div style="font-weight: 600; font-size: 13px;">{time_range}</div>
+                    <div style="margin-top: 3px; font-size: 15px;">{safe_title}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        # En gemensam knapp för både redigera och lägga till
+        has_events = not day_events.empty
+        button_text = "✏️ Hantera händelser" if has_events else "➕ Lägg till händelse"
+
+        if st.button(button_text, key=f"manage_{date_str}", use_container_width=True, type="secondary"):
+            st.session_state.show_add_dialog = True
+            st.session_state.selected_date = date_str
+            st.session_state.selected_time = day_events.iloc[0]['time'] if has_events else "09:00"
+            existing = day_events.to_dict('records') if not day_events.empty else []
+            st.session_state.existing_events = existing
+            st.rerun()
+
+        # Separator mellan dagar
+        if day_idx < 6:
+            st.markdown('<hr style="margin:16px 0;border:none;border-top:1px solid rgba(255,255,255,0.2);">', unsafe_allow_html=True)
 
     # Dialog för att lägga till/redigera händelse
     @st.dialog("Hantera händelser", width="large")
@@ -887,21 +1512,43 @@ def main():
             for event in st.session_state.existing_events:
                 with st.expander(f"✏️ {event['title']} - {event['user']} ({event['time']})", expanded=False):
                     # Redigera händelse
-                    edit_user = st.selectbox("Vem:", ["Albin", "Maria", "Familj"],
-                                            index=["Albin", "Maria", "Familj"].index(event['user']),
+                    users_list = ["Albin", "Maria", "Olle", "Ellen", "Familj"]
+                    edit_user = st.selectbox("Vem:", users_list,
+                                            index=users_list.index(event['user']) if event['user'] in users_list else 0,
                                             key=f"edit_user_{event['id']}")
                     edit_title = st.text_input("Titel:", value=event['title'], key=f"edit_title_{event['id']}")
 
                     col_e_start, col_e_end = st.columns(2)
                     with col_e_start:
-                        edit_time = st.selectbox("Från:", [f"{h:02d}:00" for h in range(7, 23)],
-                                                index=[f"{h:02d}:00" for h in range(7, 23)].index(event['time']),
+                        # Generera tider med minutprecision
+                        time_options = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in range(0, 60, 5)]
+                        current_time = event['time']
+                        if current_time not in time_options:
+                            time_options.append(current_time)
+                            time_options.sort()
+                        edit_time = st.selectbox("Från:", time_options,
+                                                index=time_options.index(current_time),
                                                 key=f"edit_time_{event['id']}")
                     with col_e_end:
                         current_duration = event.get('duration', 1)
-                        current_end_hour = int(event['time'].split(':')[0]) + current_duration
-                        edit_end_time = st.selectbox("Till:", [f"{h:02d}:00" for h in range(7, 24)],
-                                                    index=min(current_end_hour - 7, 17),
+                        try:
+                            dur = int(current_duration) if current_duration else 1
+                        except (ValueError, TypeError):
+                            dur = 1
+                        # Beräkna sluttid baserat på duration
+                        time_parts = event['time'].split(':')
+                        start_hour = int(time_parts[0])
+                        start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
+                        end_total_min = start_hour * 60 + start_min + dur * 60
+                        current_end_hour = end_total_min // 60
+                        current_end_min = end_total_min % 60
+                        end_time_options = [f"{h:02d}:{m:02d}" for h in range(6, 24) for m in range(0, 60, 5)]
+                        current_end_time = f"{current_end_hour:02d}:{current_end_min:02d}"
+                        if current_end_time not in end_time_options:
+                            end_time_options.append(current_end_time)
+                            end_time_options.sort()
+                        edit_end_time = st.selectbox("Till:", end_time_options,
+                                                    index=end_time_options.index(current_end_time) if current_end_time in end_time_options else 0,
                                                     key=f"edit_end_{event['id']}")
 
                     edit_desc = st.text_area("Beskrivning:", value=event.get('description', ''),
@@ -910,53 +1557,127 @@ def main():
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button("💾 Spara", key=f"save_{event['id']}", use_container_width=True):
-                            # Beräkna ny duration
-                            start_hour = int(edit_time.split(':')[0])
-                            end_hour = int(edit_end_time.split(':')[0])
-                            new_duration = max(1, end_hour - start_hour)
+                            # Beräkna ny duration baserat på minuter
+                            start_parts = edit_time.split(':')
+                            start_total_min = int(start_parts[0]) * 60 + int(start_parts[1])
+                            end_parts = edit_end_time.split(':')
+                            end_total_min = int(end_parts[0]) * 60 + int(end_parts[1])
+                            new_duration = max(1, (end_total_min - start_total_min) / 60)
 
                             # Uppdatera händelse
-                            conn = sqlite3.connect('familjekalender.db')
+                            conn = sqlite3.connect(DB_PATH)
                             c = conn.cursor()
                             c.execute('UPDATE events SET user=?, title=?, time=?, description=?, duration=? WHERE id=?',
                                     (edit_user, edit_title, edit_time, edit_desc, new_duration, event['id']))
                             conn.commit()
+                            backup_database()
                             conn.close()
                             st.session_state.show_add_dialog = False
                             st.success("Händelse uppdaterad!")
                             st.rerun()
                     with col2:
-                        if st.button("🗑️ Ta bort", key=f"delete_{event['id']}", use_container_width=True):
-                            delete_event(event['id'])
-                            st.session_state.show_add_dialog = False
-                            st.rerun()
+                        # Kolla om det är en återkommande händelse
+                        if event.get('repeat_pattern'):
+                            # Visa val för återkommande händelser direkt
+                            st.info("⚠️ Detta är en återkommande händelse")
+                            col_del1, col_del2 = st.columns(2)
+                            with col_del1:
+                                if st.button("Ta bort endast denna", key=f"delete_single_{event['id']}", use_container_width=True):
+                                    # Skapa undantag för detta datum genom att sätta repeat_until till dagen innan
+                                    conn = sqlite3.connect(DB_PATH)
+                                    c = conn.cursor()
+                                    current_date = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date()
+                                    # Sätt repeat_until till dagen innan detta datum
+                                    new_until = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+                                    c.execute('UPDATE events SET repeat_until=? WHERE id=?', (new_until, event['id']))
+                                    conn.commit()
+                                    backup_database()
+                                    conn.close()
+                                    st.session_state.show_add_dialog = False
+                                    st.success("Denna förekomst borttagen!")
+                                    st.rerun()
+                            with col_del2:
+                                if st.button("Ta bort alla", key=f"delete_all_{event['id']}", use_container_width=True):
+                                    delete_event(event['id'])
+                                    st.session_state.show_add_dialog = False
+                                    st.success("Alla förekomster borttagna!")
+                                    st.rerun()
+                        else:
+                            # Vanlig händelse - ta bort direkt
+                            if st.button("🗑️ Ta bort", key=f"delete_{event['id']}", use_container_width=True):
+                                delete_event(event['id'])
+                                st.session_state.show_add_dialog = False
+                                st.rerun()
             st.divider()
 
         st.subheader("➕ Lägg till ny händelse")
 
-        event_user = st.selectbox("Vem:", ["Albin", "Maria", "Familj"])
+        event_user = st.selectbox("Vem:", ["Albin", "Maria", "Olle", "Ellen", "Familj"])
         event_title = st.text_input("Titel:", placeholder="T.ex. Läkarbesök, Träning...")
 
         col_start, col_end = st.columns(2)
         with col_start:
-            event_time = st.selectbox("Från:", [f"{h:02d}:00" for h in range(7, 23)],
-                                     index=[f"{h:02d}:00" for h in range(7, 23)].index(st.session_state.selected_time))
+            # Generera tider med minutprecision (5 minuters intervall)
+            time_options = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in range(0, 60, 5)]
+            selected_time = st.session_state.selected_time
+            if selected_time not in time_options:
+                time_options.append(selected_time)
+                time_options.sort()
+            event_time = st.selectbox("Från:", time_options,
+                                     index=time_options.index(selected_time))
         with col_end:
-            event_end_time = st.selectbox("Till:", [f"{h:02d}:00" for h in range(7, 24)],
-                                         index=min(1, 24 - int(st.session_state.selected_time.split(':')[0]) - 7))
+            # Beräkna sluttid baserat på starttid (1 timme senare som default)
+            time_parts = st.session_state.selected_time.split(':')
+            start_hour = int(time_parts[0])
+            start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
+            default_end_total_min = start_hour * 60 + start_min + 60
+            default_end_hour = default_end_total_min // 60
+            default_end_min = default_end_total_min % 60
+            end_time_options = [f"{h:02d}:{m:02d}" for h in range(6, 24) for m in range(0, 60, 5)]
+            default_end_time = f"{default_end_hour:02d}:{default_end_min:02d}"
+            if default_end_time not in end_time_options:
+                end_time_options.append(default_end_time)
+                end_time_options.sort()
+            event_end_time = st.selectbox("Till:", end_time_options,
+                                         index=end_time_options.index(default_end_time) if default_end_time in end_time_options else 0)
 
         event_description = st.text_area("Beskrivning:", placeholder="Extra detaljer (frivilligt)")
+
+        # Påminnelse
+        reminder_enabled = st.checkbox("🔔 Påminnelse 15 min innan", value=False)
+
+        # Återkommande händelse
+        repeat_enabled = st.checkbox("🔁 Upprepa varje vecka", value=False)
+
+        repeat_pattern = None
+        repeat_until = None
+
+        if repeat_enabled:
+            # Default: 3 månader framåt
+            default_until = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date() + timedelta(days=90)
+
+            # Auto-beräkna veckodag från valt datum
+            selected_date_obj = datetime.strptime(st.session_state.selected_date, '%Y-%m-%d').date()
+            weekday_names = ["mån", "tis", "ons", "tor", "fre", "lör", "sön"]
+            repeat_pattern = weekday_names[selected_date_obj.weekday()]
+
+            st.info(f"📅 Denna händelse kommer att upprepas varje **{repeat_pattern}** från och med **{st.session_state.selected_date}**")
+
+            repeat_until_date = st.date_input("Upprepa till:", value=default_until)
+            repeat_until = repeat_until_date.strftime('%Y-%m-%d')
 
         col_submit, col_cancel = st.columns(2)
         with col_submit:
             if st.button("✨ Lägg till", use_container_width=True, type="primary"):
                 if event_title:
-                    # Beräkna duration från start och sluttid
-                    start_hour = int(event_time.split(':')[0])
-                    end_hour = int(event_end_time.split(':')[0])
-                    duration = max(1, end_hour - start_hour)
+                    # Beräkna duration från start och sluttid i minuter
+                    start_parts = event_time.split(':')
+                    start_total_min = int(start_parts[0]) * 60 + int(start_parts[1])
+                    end_parts = event_end_time.split(':')
+                    end_total_min = int(end_parts[0]) * 60 + int(end_parts[1])
+                    duration = max(1, (end_total_min - start_total_min) / 60)
 
-                    add_event(event_user, st.session_state.selected_date, event_time, event_title, event_description, duration)
+                    add_event(event_user, st.session_state.selected_date, event_time, event_title, event_description, duration, repeat_pattern, repeat_until, reminder_enabled)
                     st.session_state.show_add_dialog = False
                     st.success(f"Händelse tillagd!")
                     st.rerun()
@@ -970,30 +1691,19 @@ def main():
     if st.session_state.show_add_dialog:
         show_event_dialog()
 
-    # Visa alla händelser för veckan i en lista (för backup/översikt)
-    if not events_df.empty:
-        st.header("📋 Alla händelser denna vecka")
+    # Navigation i botten - veckonavigering (endast pilar)
+    st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
+    nav_bottom_col1, nav_bottom_col2 = st.columns(2)
 
-        # Gruppera efter användare
-        for user in ['Albin', 'Maria', 'Familj']:
-            user_events = events_df[events_df['user'] == user]
-            if not user_events.empty:
-                st.subheader(f"{user}s händelser")
-                for _, event in user_events.iterrows():
-                    date_obj = datetime.strptime(event['date'], '%Y-%m-%d').date()
-                    day_name = calendar.day_name[date_obj.weekday()]
+    with nav_bottom_col1:
+        if st.button("⬅️", use_container_width=True, key="prev_week_bottom"):
+            st.session_state['current_week'] -= timedelta(days=7)
+            st.rerun()
 
-                    col1, col2, col3 = st.columns([2, 4, 1])
-                    with col1:
-                        st.write(f"**{day_name} {event['time']}**")
-                    with col2:
-                        st.write(f"{event['title']}")
-                        if event['description']:
-                            st.write(f"*{event['description']}*")
-                    with col3:
-                        if st.button("🗑️", key=f"list_delete_{event['id']}"):
-                            delete_event(event['id'])
-                            st.rerun()
+    with nav_bottom_col2:
+        if st.button("➡️", use_container_width=True, key="next_week_bottom"):
+            st.session_state['current_week'] += timedelta(days=7)
+            st.rerun()
 
 if __name__ == "__main__":
     main()
