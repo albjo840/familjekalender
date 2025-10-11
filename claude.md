@@ -22,15 +22,19 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Konfiguration (valfritt)
+### Konfiguration (REKOMMENDERAT)
 
-För att aktivera Hugging Face AI-assistent istället för regelbaserad AI:
+För att aktivera AI-assistenten:
 
-1. Skapa en `.streamlit/secrets.toml` fil
-2. Lägg till din Hugging Face API-nyckel:
+1. Skapa ett gratis konto på Hugging Face: https://huggingface.co/join
+2. Skapa en API-nyckel: https://huggingface.co/settings/tokens
+3. Skapa en `.streamlit/secrets.toml` fil (kopiera från secrets.toml.example)
+4. Lägg till din Hugging Face API-nyckel:
 ```toml
 HUGGINGFACE_API_KEY = "hf_xxxxxxxxxxxxx"
 ```
+
+Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inference API)
 
 ## Funktioner
 
@@ -77,8 +81,10 @@ HUGGINGFACE_API_KEY = "hf_xxxxxxxxxxxxx"
 - **Pandas**: Datahantering
 
 ### AI/ML
-- **Regelbaserad AI** (fallback): Pattern matching för datum, tid, användare
-- **Hugging Face API** (valfritt): Zephyr-7b-beta modell för naturlig språkförståelse
+- **Hugging Face Inference API**: Qwen 2.5 72B Instruct modell
+- **Intelligent bokning**: Förstår naturligt språk och bokar automatiskt
+- **Kontextmedveten**: Känner till kalenderns aktuella tillstånd
+- **Gratis**: Ingen kostnad via Hugging Face Inference API
 
 ### Databas-schema
 ```sql
@@ -98,18 +104,19 @@ events (
 
 ## AI-funktionalitet
 
-### Regelbaserad AI (aktiv utan API-nyckel)
-- Extraherar datum: "17e oktober", "den 17", "imorgon", "övermorgon"
-- Identifierar användare: automatisk igenkänning av namn
-- Skiljer frågor från bokningar via nyckelord:
-  - **Frågor**: vad, när, vilken, visa, hitta, har, finns
-  - **Bokningar**: boka, lägg till, skapa, planera
+### Hugging Face Inference API (Qwen 2.5 72B Instruct)
+- **Kraftfull språkförståelse**: 72B parametrar för intelligent hantering
+- **Svenska språket**: Utmärkt förståelse för svenska instruktioner
+- **Kontextmedveten**: Känner till hela kalenderns tillstånd
+- **Gratis**: Ingen kostnad via Hugging Face Inference API
+- **Fungerar överallt**: Desktop, mobil, tablet - ingen lokal GPU krävs
 
-### Hugging Face AI (kräver API-nyckel)
-- Använder **Zephyr-7b-beta** modell (öppen licens)
-- Förstår komplex naturlig språk
-- Intelligent bokning via `BOOK_EVENT|user|date|time|title|desc|duration`
-- Bättre kontext-förståelse för komplexa frågor
+### Kapabiliteter
+- Extraherar datum: "17e oktober", "den 17", "imorgon", "nästa vecka", "på fredag"
+- Identifierar användare: Albin, Maria, Familj
+- Förstår komplexa frågor: "När är Maria ledig på fredag?"
+- Intelligent bokning: "Boka lunch för Maria imorgon kl 12 i 2 timmar"
+- Automatisk bokning via: `BOOK_EVENT|user|date|time|title|desc|duration`
 
 ## Projektstruktur
 
@@ -145,8 +152,8 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar
-- ✅ Regelbaserad AI med datumfiltrering
-- ✅ AI skiljer frågor från bokningar
+- ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - Kraftfull AI via Hugging Face
+- ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
 - ✅ Återkommande händelser
 - ✅ Session state-fix för Streamlit
 - ✅ Förbättrad mobil-responsivitet

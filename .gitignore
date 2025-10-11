@@ -8,3 +8,5 @@ familjekalender.db
 venv/
 .vscode/
 .idea/
+.streamlit/secrets.toml
+*.db.backup
