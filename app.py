@@ -1421,17 +1421,8 @@ def main():
     # Sticky AI-container längst ner - start wrapper
     st.markdown('<div class="sticky-chat-container"><div class="sticky-chat-inner">', unsafe_allow_html=True)
 
-    # Röstknapp (kompakt, inline)
+    # JavaScript för notifikationer och sticky fix
     st.markdown("""
-    <button id="voice-button" onclick="startVoiceRecognition()"
-            style="background: linear-gradient(135deg, #5856d6 0%, #af52de 100%);
-                   color: white; border: none; border-radius: 50%; width: 44px; height: 44px;
-                   font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(88,86,214,0.3);
-                   transition: all 0.3s ease; flex-shrink: 0;">
-        🎤
-    </button>
-    <p id="voice-status" style="color: white; margin: 0; font-size: 10px; position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap;"></p>
-
     <script>
     // Push-notifikationer setup
     if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -1514,71 +1505,6 @@ def main():
     // Observera DOM-ändringar och fixa sticky
     const observer = new MutationObserver(fixStickyContainer);
     observer.observe(document.body, { childList: true, subtree: true });
-    </script>
-
-    <script>
-    let recognition;
-    let isRecording = false;
-
-    function startVoiceRecognition() {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            alert('Röstinmatning stöds inte i din webbläsare. Använd Chrome eller Edge.');
-            return;
-        }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.lang = 'sv-SE';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-
-        const button = document.getElementById('voice-button');
-        const status = document.getElementById('voice-status');
-
-        if (isRecording) {
-            recognition.stop();
-            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
-            button.textContent = '🎤';
-            status.textContent = '';
-            isRecording = false;
-            return;
-        }
-
-        recognition.onstart = function() {
-            isRecording = true;
-            button.style.background = 'linear-gradient(135deg, #34c759 0%, #30d158 100%)';
-            button.textContent = '⏹️';
-            status.textContent = 'Lyssnar... Prata nu!';
-        };
-
-        recognition.onresult = function(event) {
-            const transcript = event.results[0][0].transcript;
-            status.textContent = 'Bearbetar: "' + transcript + '"';
-
-            // Sätt input i Streamlit text input
-            const textInput = window.parent.document.querySelector('input[aria-label="🤖 Fråga AI-assistenten eller boka händelse:"]');
-            if (textInput) {
-                textInput.value = transcript;
-                textInput.dispatchEvent(new Event('input', { bubbles: true }));
-                textInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        };
-
-        recognition.onerror = function(event) {
-            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
-            button.textContent = '🎤';
-            status.textContent = 'Fel: ' + event.error;
-            isRecording = false;
-        };
-
-        recognition.onend = function() {
-            button.style.background = 'linear-gradient(135deg, #5856d6 0%, #af52de 100%)';
-            button.textContent = '🎤';
-            isRecording = false;
-        };
-
-        recognition.start();
-    }
     </script>
     """, unsafe_allow_html=True)
 
