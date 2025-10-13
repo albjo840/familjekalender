@@ -1683,25 +1683,5 @@ def main():
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
 
-    # AI-fält också NEDERST för bekvämlighet när man scrollat ner
-    st.markdown("---")
-    st.markdown("### 💬 Fråga AI-assistenten")
-    user_input_bottom = st.text_input(
-        "AI Assistant Bottom",
-        placeholder="Fråga eller boka händelse...",
-        key="ai_search_bottom",
-        label_visibility="collapsed"
-    )
-
-    if user_input_bottom:
-        with st.spinner('🤔 Tänker...'):
-            ai_response = call_gpt_local(user_input_bottom, st.session_state['current_week'].year, st.session_state['current_week'].month)
-
-        if "✓" in ai_response:
-            st.success(ai_response)
-            st.rerun()
-        else:
-            st.info(ai_response)
-
 if __name__ == "__main__":
     main()
