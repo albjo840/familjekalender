@@ -1190,6 +1190,18 @@ def main():
         events_next_month = get_events_for_month(week_end.year, week_end.month)
         events = events + events_next_month
 
+        # Deduplisera events baserat på id, date och time för att undvika dubbletter
+        # När återkommande händelser expanderas över månadsskiften kan samma event förekomma i båda listorna
+        seen = set()
+        unique_events = []
+        for event in events:
+            # Skapa en unik nyckel baserad på id, date och time (index 0, 2, 3)
+            key = (event[0], event[2], event[3])
+            if key not in seen:
+                seen.add(key)
+                unique_events.append(event)
+        events = unique_events
+
     # Skapa DataFrame för enklare hantering
     if events:
         # Kontrollera om duration finns i resultatet
