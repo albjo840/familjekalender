@@ -904,168 +904,8 @@ def check_and_send_reminders():
     except Exception as e:
         print(f"Reminder check fel: {e}")
 
-def handle_simple_command(user_message, year, month):
-    """Enkel regelbaserad kommandohantering"""
-    import re
-
-    msg_lower = user_message.lower()
-    today = datetime.now()
-
-    # VIKTIGT: Kolla först om det är en FRÅGA (inte en bokning)
-    question_keywords = ['vad', 'när', 'vilken', 'visa', 'hitta', 'har', 'finns', 'ledig', 'upptagen']
-    if any(keyword in msg_lower for keyword in question_keywords):
-        # Det är en fråga - svara från kalenderkontexten
-
-        # Hitta vilken användare det gäller
-        users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
-        mentioned_user = None
-        for key, val in users_map.items():
-            if key in msg_lower:
-                mentioned_user = val
-                break
-
-        # Försök extrahera datum från frågan
-        target_date = None
-
-        # Kolla efter specifikt datum (t.ex. "17e oktober", "17 oktober", "den 17")
-        month_names = {
-            'januari': 1, 'februari': 2, 'mars': 3, 'april': 4, 'maj': 5, 'juni': 6,
-            'juli': 7, 'augusti': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12
-        }
-
-        # Försök matcha "17e oktober" eller "17 oktober"
-        for month_name, month_num in month_names.items():
-            pattern = r'(\d{1,2})\s*(?:e|:e)?\s+' + month_name
-            match = re.search(pattern, msg_lower)
-            if match:
-                day = int(match.group(1))
-                # Använd current year om inte specificerat
-                try:
-                    target_date = datetime(today.year, month_num, day).strftime('%Y-%m-%d')
-                except ValueError:
-                    pass
-                break
-
-        # Om inget specifikt datum, kolla "den 17", "17e", etc.
-        if not target_date:
-            day_match = re.search(r'den\s+(\d{1,2})|(\d{1,2})\s*(?:e|:e)', msg_lower)
-            if day_match:
-                day = int(day_match.group(1) or day_match.group(2))
-                # Använd aktuell månad
-                try:
-                    target_date = datetime(today.year, today.month, day).strftime('%Y-%m-%d')
-                except ValueError:
-                    pass
-
-        # Hämta alla events för månaden (eller flera månader om nödvändigt)
-        events = get_events_for_month(year, month)
-
-        # Om target_date är i en annan månad, hämta även den månaden
-        if target_date:
-            target_dt = datetime.strptime(target_date, '%Y-%m-%d')
-            if target_dt.month != month:
-                events += get_events_for_month(target_dt.year, target_dt.month)
-
-        if events:
-            response = ""
-            found_any = False
-
-            for event in events:
-                e = safe_unpack_event(event)
-
-                # Filtrera på användare om specificerad
-                if mentioned_user and e['user'] != mentioned_user:
-                    continue
-
-                # Filtrera på datum om specificerat
-                if target_date and e['date'] != target_date:
-                    continue
-
-                found_any = True
-                response += f"- {e['date']} kl {e['time']}: {e['title']} ({e['user']})\n"
-
-            if found_any:
-                prefix = f"{'För ' + mentioned_user if mentioned_user else 'Händelser'}"
-                if target_date:
-                    prefix += f" den {target_date}"
-                return f"{prefix}:\n\n{response}"
-            else:
-                return "Jag hittade inga händelser som matchar din fråga."
-        else:
-            return "Inga händelser hittades för den perioden."
-
-    # Kolla om det är en BOKNINGSFÖRFRÅGAN
-    booking_keywords = ['boka', 'lägg till', 'skapa', 'planera']
-    if not any(keyword in msg_lower for keyword in booking_keywords):
-        return "⚠️ Jag förstod inte din förfrågan. Vill du boka något eller ställa en fråga om kalendern?"
-
-    # Hitta användare
-    users_map = {"albin": "Albin", "maria": "Maria", "olle": "Olle", "ellen": "Ellen", "familj": "Familj"}
-    user = "Albin"  # Default
-    for key, val in users_map.items():
-        if key in msg_lower:
-            user = val
-            break
-
-    # Hitta datum
-    date_obj = today
-    if "imorgon" in msg_lower:
-        date_obj = today + timedelta(days=1)
-    elif "övermorgon" in msg_lower:
-        date_obj = today + timedelta(days=2)
-
-    # Hitta tid och sluttid
-    time_str = "09:00"
-    duration = 1
-
-    # Leta efter "från X till Y" eller "X till Y" format
-    time_range_match = re.search(r'(\d{1,2})[:\.](\d{2})\s+till\s+(\d{1,2})[:\.]?(\d{2})?', user_message)
-    if time_range_match:
-        start_hour = int(time_range_match.group(1))
-        start_min = int(time_range_match.group(2))
-        end_hour = int(time_range_match.group(3))
-        end_min = int(time_range_match.group(4)) if time_range_match.group(4) else 0
-
-        time_str = f"{start_hour:02d}:{start_min:02d}"
-
-        # Beräkna duration i timmar (med decimaler för minuter)
-        start_total_min = start_hour * 60 + start_min
-        end_total_min = end_hour * 60 + end_min
-        duration_minutes = end_total_min - start_total_min
-        duration = max(1, duration_minutes / 60)  # Konvertera till timmar
-    else:
-        # Enkel tidsmatchning utan sluttid
-        time_match = re.search(r'(\d{1,2})[:\.](\d{2})', user_message)
-        if time_match:
-            hour = int(time_match.group(1))
-            minute = int(time_match.group(2))
-            time_str = f"{hour:02d}:{minute:02d}"
-        else:
-            hour_match = re.search(r'kl\.?\s*(\d{1,2})', user_message)
-            if hour_match:
-                hour = int(hour_match.group(1))
-                time_str = f"{hour:02d}:00"
-
-    # Hitta titel
-    title = "Händelse"
-    for pattern in [r'boka\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)', r'lägg\s+till\s+(.+?)(?:\s+för|\s+imorgon|\s+kl|\s+\d|$)']:
-        match = re.search(pattern, msg_lower)
-        if match:
-            title = match.group(1).strip().title()
-            break
-
-    date_str = date_obj.strftime('%Y-%m-%d')
-
-    try:
-        add_event(user, date_str, time_str, title, "", duration)
-        end_hour_calc = int(time_str.split(':')[0]) + int(duration)
-        end_min_calc = int((duration % 1) * 60)
-        return f"✓ Bokad: {title} för {user} den {date_str} kl {time_str}-{end_hour_calc:02d}:{end_min_calc:02d}"
-    except Exception as e:
-        return f"⚠️ Kunde inte boka: {str(e)}"
-
 def call_gpt_local(user_message, year, month):
-    """Anropar Hugging Face API med fallback till enkel regelbaserad AI"""
+    """Anropar Hugging Face API för AI-assistans"""
 
     # Hämta API-nyckel från Streamlit secrets
     try:
@@ -1073,9 +913,9 @@ def call_gpt_local(user_message, year, month):
     except:
         hf_token = ""
 
-    # Om ingen API-nyckel, använd enkel regelbaserad assistent
+    # Kräver API-nyckel
     if not hf_token:
-        return handle_simple_command(user_message, year, month)
+        return "⚠️ Hugging Face API-nyckel saknas. Lägg till HUGGINGFACE_API_KEY i Streamlit secrets."
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
@@ -1293,7 +1133,6 @@ def main():
         st.session_state['current_week'] = today - timedelta(days=today.weekday())
 
     # AI-fält ÖVERST (alltid synligt)
-    st.markdown("### 💬 Fråga AI-assistenten")
     user_input_top = st.text_input(
         "AI Assistant",
         placeholder="Fråga eller boka händelse...",
