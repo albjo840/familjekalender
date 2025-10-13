@@ -35,8 +35,26 @@ st.markdown("""
 
     html, body, .stApp {
         font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-image: url('family_background.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
         min-height: 100vh;
+        position: relative;
+    }
+
+    /* Overlay för att göra text läsbar över bilden */
+    html::before, body::before, .stApp::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.7) 0%, rgba(118, 75, 162, 0.7) 100%);
+        z-index: -1;
+        pointer-events: none;
     }
 
     .main {
