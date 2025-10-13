@@ -1,19 +1,6 @@
 {
-  "backup_time": "2025-10-13T19:35:39.154480",
+  "backup_time": "2025-10-13T21:03:01.485311",
   "events": [
-    {
-      "id": 39,
-      "user": "Olle",
-      "date": "2025-10-13",
-      "time": "09:00",
-      "duration": 1.5,
-      "title": "Innebandy",
-      "description": "Innebandyträning",
-      "created_at": "2025-10-13 19:40:00",
-      "repeat_pattern": "sön",
-      "repeat_until": "2026-01-04",
-      "reminder": 0
-    },
     {
       "id": 37,
       "user": "Olle",
