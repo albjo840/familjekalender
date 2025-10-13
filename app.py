@@ -387,13 +387,14 @@ st.markdown("""
         border: 1px solid rgba(142, 142, 147, 0.2);
     }
 
-    /* Sticky AI chat container längst ner - FÖRSTÄRKT */
+    /* Sticky AI chat container längst ner - ULTRA FÖRSTÄRKT */
     .sticky-chat-container {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        width: 100% !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
         background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.98) 100%) !important;
         backdrop-filter: blur(20px) !important;
         padding: 12px 16px !important;
@@ -401,6 +402,13 @@ st.markdown("""
         z-index: 999999 !important;
         border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
         margin: 0 !important;
+        transform: translateZ(0) !important;
+    }
+
+    /* Bryt Streamlit's container-hierarki för sticky element */
+    .sticky-chat-container,
+    .sticky-chat-container * {
+        transform-style: preserve-3d !important;
     }
 
     .sticky-chat-inner {
@@ -468,9 +476,35 @@ st.markdown("""
         margin-bottom: 0 !important;
     }
 
-    /* Förhindra att Streamlit flyttar containern */
-    div[data-testid="stVerticalBlock"] > div:has(.sticky-chat-container) {
+    /* Förhindra att Streamlit flyttar containern - FÖRSTÄRKT */
+    div[data-testid="stVerticalBlock"] > div:has(.sticky-chat-container),
+    div[data-testid="stVerticalBlock"]:has(.sticky-chat-container),
+    .element-container:has(.sticky-chat-container),
+    div:has(> .sticky-chat-container) {
         position: static !important;
+        overflow: visible !important;
+        contain: none !important;
+    }
+
+    /* Gör parent elements till sticky container synliga */
+    body:has(.sticky-chat-container),
+    .main:has(.sticky-chat-container),
+    [data-testid="stAppViewContainer"]:has(.sticky-chat-container) {
+        overflow: visible !important;
+    }
+
+    /* Force sticky för alla parent containers */
+    .sticky-chat-container {
+        will-change: transform !important;
+    }
+
+    /* Alternativ metod: Använd Streamlit's inbyggda container */
+    div[data-testid="stBottom"] {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 999999 !important;
     }
 
 </style>
@@ -1457,6 +1491,29 @@ def main():
     } else {
         loadAndScheduleReminders();
     }
+
+    // FIXA STICKY CONTAINER - Flytta till body för att undvika scroll-problem
+    function fixStickyContainer() {
+        const container = document.querySelector('.sticky-chat-container');
+        if (container && container.parentElement.tagName !== 'BODY') {
+            console.log('[STICKY FIX] Moving sticky container to body');
+            document.body.appendChild(container);
+        }
+    }
+
+    // Kör fix när sidan laddas och efter Streamlit-uppdateringar
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fixStickyContainer);
+    } else {
+        fixStickyContainer();
+    }
+
+    // Kör fix efter varje Streamlit-omritning
+    setInterval(fixStickyContainer, 500);
+
+    // Observera DOM-ändringar och fixa sticky
+    const observer = new MutationObserver(fixStickyContainer);
+    observer.observe(document.body, { childList: true, subtree: true });
     </script>
 
     <script>
