@@ -405,125 +405,6 @@ st.markdown("""
         border: 1px solid rgba(142, 142, 147, 0.2);
     }
 
-    /* Sticky AI chat container längst ner - ULTRA FÖRSTÄRKT */
-    .sticky-chat-container {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100vw !important;
-        max-width: 100vw !important;
-        background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.98) 100%) !important;
-        backdrop-filter: blur(20px) !important;
-        padding: 12px 16px !important;
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2) !important;
-        z-index: 999999 !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
-        margin: 0 !important;
-        transform: translateZ(0) !important;
-    }
-
-    /* Bryt Streamlit's container-hierarki för sticky element */
-    .sticky-chat-container,
-    .sticky-chat-container * {
-        transform-style: preserve-3d !important;
-    }
-
-    .sticky-chat-inner {
-        max-width: 800px !important;
-        margin: 0 auto !important;
-        display: flex !important;
-        gap: 12px !important;
-        align-items: center !important;
-        flex-direction: row !important;
-    }
-
-    /* Gör text input i sticky container snyggare - FÖRSTÄRKT */
-    .sticky-chat-container input[type="text"],
-    .sticky-chat-container input {
-        flex: 1 !important;
-        background: rgba(255, 255, 255, 0.95) !important;
-        border: 1px solid rgba(255, 255, 255, 0.3) !important;
-        border-radius: 22px !important;
-        padding: 10px 16px !important;
-        font-size: 14px !important;
-        color: #1d1d1f !important;
-        min-width: 200px !important;
-    }
-
-    .sticky-chat-container input[type="text"]:focus,
-    .sticky-chat-container input:focus {
-        outline: none !important;
-        border-color: rgba(255, 255, 255, 0.6) !important;
-        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1) !important;
-    }
-
-    .sticky-chat-container label,
-    .sticky-chat-container .stTextInput label {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .sticky-chat-container .stTextInput {
-        flex: 1 !important;
-        margin: 0 !important;
-    }
-
-    .sticky-chat-container .stTextInput > div {
-        margin: 0 !important;
-    }
-
-    @media (max-width: 768px) {
-        .sticky-chat-container {
-            padding: 10px 12px !important;
-        }
-        .sticky-chat-inner {
-            gap: 8px !important;
-        }
-    }
-
-    /* Ge plats för sticky container längst ner - FÖRSTÄRKT */
-    .main .block-container,
-    .block-container,
-    section.main > div,
-    div[data-testid="stAppViewContainer"] > section {
-        padding-bottom: 100px !important;
-        margin-bottom: 0 !important;
-    }
-
-    /* Förhindra att Streamlit flyttar containern - FÖRSTÄRKT */
-    div[data-testid="stVerticalBlock"] > div:has(.sticky-chat-container),
-    div[data-testid="stVerticalBlock"]:has(.sticky-chat-container),
-    .element-container:has(.sticky-chat-container),
-    div:has(> .sticky-chat-container) {
-        position: static !important;
-        overflow: visible !important;
-        contain: none !important;
-    }
-
-    /* Gör parent elements till sticky container synliga */
-    body:has(.sticky-chat-container),
-    .main:has(.sticky-chat-container),
-    [data-testid="stAppViewContainer"]:has(.sticky-chat-container) {
-        overflow: visible !important;
-    }
-
-    /* Force sticky för alla parent containers */
-    .sticky-chat-container {
-        will-change: transform !important;
-    }
-
-    /* Alternativ metod: Använd Streamlit's inbyggda container */
-    div[data-testid="stBottom"] {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        z-index: 999999 !important;
-    }
 
 </style>
 """, unsafe_allow_html=True)
@@ -1411,6 +1292,27 @@ def main():
         today = datetime.now().date()
         st.session_state['current_week'] = today - timedelta(days=today.weekday())
 
+    # AI-fält ÖVERST (alltid synligt)
+    st.markdown("### 💬 Fråga AI-assistenten")
+    user_input_top = st.text_input(
+        "AI Assistant",
+        placeholder="Fråga eller boka händelse...",
+        key="ai_search_top",
+        label_visibility="collapsed"
+    )
+
+    if user_input_top:
+        with st.spinner('🤔 Tänker...'):
+            ai_response = call_gpt_local(user_input_top, st.session_state['current_week'].year, st.session_state['current_week'].month)
+
+        if "✓" in ai_response:
+            st.success(ai_response)
+            st.rerun()
+        else:
+            st.info(ai_response)
+
+    st.markdown("---")
+
     # Navigation i toppen - veckonavigering
     nav_col1, nav_col2, nav_col3 = st.columns([1, 3, 1])
 
@@ -1781,61 +1683,19 @@ def main():
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
 
-    # Extra padding för sticky AI-fält
-    st.markdown('<div style="height: 80px;"></div>', unsafe_allow_html=True)
+    # AI-fält också NEDERST för bekvämlighet när man scrollat ner
+    st.markdown("---")
+    st.markdown("### 💬 Fråga AI-assistenten")
+    user_input_bottom = st.text_input(
+        "AI Assistant Bottom",
+        placeholder="Fråga eller boka händelse...",
+        key="ai_search_bottom",
+        label_visibility="collapsed"
+    )
 
-    # ==================== STICKY AI FIELD ====================
-    # Lägg detta SIST i main() för bäst sticky-funktion
-
-    st.markdown('<div class="sticky-chat-container" id="sticky-ai-field"><div class="sticky-chat-inner">', unsafe_allow_html=True)
-
-    # AI textinput
-    user_input = st.text_input("AI",
-                                placeholder="Fråga eller boka...",
-                                key="ai_search",
-                                label_visibility="collapsed")
-
-    st.markdown('</div></div>', unsafe_allow_html=True)
-
-    # JavaScript för sticky fix OCH notifikationer
-    st.markdown("""
-    <script>
-    // FIXA STICKY CONTAINER - Flytta till body för att undvika scroll-problem
-    function fixStickyContainer() {
-        const container = document.querySelector('.sticky-chat-container');
-        if (container && container.parentElement.tagName !== 'BODY') {
-            console.log('[STICKY FIX] Moving sticky container to body');
-            document.body.appendChild(container);
-        }
-    }
-
-    // Kör fix när sidan laddas och efter Streamlit-uppdateringar
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fixStickyContainer);
-    } else {
-        fixStickyContainer();
-    }
-
-    // Kör fix efter varje Streamlit-omritning
-    setInterval(fixStickyContainer, 500);
-
-    // Observera DOM-ändringar och fixa sticky
-    const observer = new MutationObserver(fixStickyContainer);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    // Push-notifikationer setup
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-        navigator.serviceWorker.register('/sw.js').catch(function(err) {
-            console.log('Service Worker registration failed:', err);
-        });
-    }
-    </script>
-    """, unsafe_allow_html=True)
-
-    # Hantera AI input
-    if user_input:
+    if user_input_bottom:
         with st.spinner('🤔 Tänker...'):
-            ai_response = call_gpt_local(user_input, st.session_state['current_week'].year, st.session_state['current_week'].month)
+            ai_response = call_gpt_local(user_input_bottom, st.session_state['current_week'].year, st.session_state['current_week'].month)
 
         if "✓" in ai_response:
             st.success(ai_response)
