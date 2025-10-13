@@ -830,9 +830,14 @@ def get_available_times(date_str, user=None):
 def ai_book_event(user, date, time, title, description="", duration=1):
     """Funktion som AI kan anropa för att boka händelser"""
     try:
+        st.write(f"🔍 DEBUG ai_book_event: Calling add_event med user={user}, date={date}, time={time}, title={title}")  # DEBUG
         add_event(user, date, time, title, description, duration)
+        st.write(f"🔍 DEBUG ai_book_event: add_event lyckades!")  # DEBUG
         return f"✓ Bokad: {title} för {user} den {date} kl {time}"
     except Exception as e:
+        st.write(f"🔍 DEBUG ai_book_event: Exception: {str(e)}")  # DEBUG
+        import traceback
+        st.write(f"🔍 DEBUG ai_book_event: Traceback: {traceback.format_exc()}")  # DEBUG
         return f"✗ Fel vid bokning: {str(e)}"
 
 def send_telegram_reminder(user, title, time_str, date_str):
@@ -986,8 +991,7 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
         response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
         if response.status_code != 200:
-            # Fallback till enkel regelbaserad AI
-            return handle_simple_command(user_message, year, month)
+            return f"⚠️ Hugging Face API fel (status {response.status_code}). Försök igen om en stund."
 
         result = response.json()
 
@@ -1004,9 +1008,11 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
         # Kontrollera om AI:n vill boka en händelse
         if "BOOK_EVENT|" in ai_response:
+            st.write("🔍 DEBUG: BOOK_EVENT kommando detekterat!")  # DEBUG
             try:
                 # Extrahera BOOK_EVENT-kommandot (ta bara första raden om det finns flera)
                 book_line = ai_response.split("BOOK_EVENT|")[1].split("\n")[0]
+                st.write(f"🔍 DEBUG: book_line = {book_line}")  # DEBUG
                 parts = book_line.split("|")
 
                 if len(parts) < 4:
@@ -1044,8 +1050,10 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
                     if match:
                         duration = min(int(match.group()), 12)  # Max 12 timmar
 
+                st.write(f"🔍 DEBUG: Anropar ai_book_event med user={user}, date={date}, time={time}, title={title}")  # DEBUG
                 booking_result = ai_book_event(user.strip(), date.strip(), time.strip(),
                                                title.strip(), description, duration)
+                st.write(f"🔍 DEBUG: booking_result = {booking_result}")  # DEBUG
 
                 # Ta bort BOOK_EVENT-kommandot från svaret
                 ai_response = ai_response.split("BOOK_EVENT|")[0].strip() + "\n\n" + booking_result
@@ -1066,6 +1074,17 @@ def main():
     if 'db_initialized' not in st.session_state:
         init_database()
         st.session_state['db_initialized'] = True
+
+    # Rensa cache-knapp i sidebar (dold i en expander)
+    with st.sidebar:
+        with st.expander("🔧 Avancerat"):
+            if st.button("🗑️ Rensa cache och session"):
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                for key in list(st.session_state.keys()):
+                    if key != 'db_initialized':
+                        del st.session_state[key]
+                st.rerun()
 
     # Kolla och skicka Telegram-påminnelser (körs varje gång sidan laddas)
     check_and_send_reminders()
