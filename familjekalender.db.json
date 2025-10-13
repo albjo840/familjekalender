@@ -2,14 +2,14 @@
   "backup_time": "2025-10-13T19:35:39.154480",
   "events": [
     {
-      "id": 36,
+      "id": 39,
       "user": "Olle",
-      "date": "2025-10-06",
-      "time": "11:00",
-      "duration": 1,
-      "title": "Jiu-jitsu",
-      "description": "Kampsportsträning",
-      "created_at": "2025-10-09 19:53:35",
+      "date": "2025-10-13",
+      "time": "09:00",
+      "duration": 1.5,
+      "title": "Innebandy",
+      "description": "Innebandyträning",
+      "created_at": "2025-10-13 19:40:00",
       "repeat_pattern": "sön",
       "repeat_until": "2026-01-04",
       "reminder": 0
