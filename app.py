@@ -8,6 +8,7 @@ import requests
 import json
 import os
 import shutil
+from db_persistence import create_persistent_db
 
 # Konfigurera sidan
 st.set_page_config(
@@ -534,39 +535,63 @@ def safe_unpack_event(event):
     else:
         return defaults
 
-# Databasplats - använd miljövariabel eller default
-DB_PATH = os.getenv('CALENDAR_DB_PATH', 'familjekalender.db')
+# Databasplats - använd absolut sökväg för persistens
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+DB_PATH = os.getenv('CALENDAR_DB_PATH', os.path.join(SCRIPT_DIR, 'familjekalender.db'))
 
-# Databas-funktioner
+# Initiera persistent databas (sköter automatisk backup/restore)
+db_persistence = None
+
+# Databas-funktioner (uppdaterade med persistence)
 def backup_database():
-    """Skapar en backup av databasen"""
+    """Skapar en backup av databasen (både .backup och JSON)"""
+    global db_persistence
+
+    # Traditionell SQLite backup
     if os.path.exists(DB_PATH):
         backup_path = f"{DB_PATH}.backup"
         try:
             shutil.copy2(DB_PATH, backup_path)
-            return True
         except Exception as e:
-            print(f"Backup failed: {e}")
-            return False
-    return False
+            print(f"SQLite backup failed: {e}")
+
+    # JSON backup via persistence layer
+    if db_persistence:
+        db_persistence.auto_backup_on_change()
+
+    return True
 
 def restore_database():
-    """Återställer databasen från backup om den saknas"""
+    """Återställer databasen från backup"""
+    global db_persistence
+
+    # Försök JSON-restore först (mer pålitlig)
+    if db_persistence:
+        if db_persistence.restore_from_json():
+            print("[RESTORE] Successfully restored from JSON backup")
+            return True
+
+    # Fallback till SQLite backup
     backup_path = f"{DB_PATH}.backup"
     if not os.path.exists(DB_PATH) and os.path.exists(backup_path):
         try:
             shutil.copy2(backup_path, DB_PATH)
-            print("Database restored from backup")
+            print("[RESTORE] Restored from SQLite backup")
             return True
         except Exception as e:
             print(f"Restore failed: {e}")
             return False
+
     return False
 
 def init_database():
-    # Försök återställa från backup om databasen saknas
-    restore_database()
+    """Initierar databas med robust persistence"""
+    global db_persistence
 
+    # Initiera persistence layer (hanterar automatisk restore)
+    db_persistence = create_persistent_db(DB_PATH)
+
+    # Skapa databas och tabeller
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
@@ -582,6 +607,7 @@ def init_database():
             reminder BOOLEAN DEFAULT 0
         )
     ''')
+
     # Lägg till duration-kolumn om den inte finns
     c.execute("PRAGMA table_info(events)")
     columns = [column[1] for column in c.fetchall()]
@@ -594,7 +620,17 @@ def init_database():
     if 'reminder' not in columns:
         c.execute('ALTER TABLE events ADD COLUMN reminder BOOLEAN DEFAULT 0')
     conn.commit()
+
+    # Kolla om vi precis återställde och skapa en backup direkt
+    c.execute("SELECT COUNT(*) FROM events")
+    count = c.fetchone()[0]
     conn.close()
+
+    print(f"[DATABASE] Initialized with {count} events")
+
+    # Skapa initial backup om vi har data
+    if count > 0:
+        backup_database()
 
 def add_event(user, date, time, title, description="", duration=1, repeat_pattern=None, repeat_until=None, reminder=False):
     # Input validering

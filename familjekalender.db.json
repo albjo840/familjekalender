@@ -1,0 +1,57 @@
+{
+  "backup_time": "2025-10-13T19:35:39.154480",
+  "events": [
+    {
+      "id": 36,
+      "user": "Olle",
+      "date": "2025-10-06",
+      "time": "11:00",
+      "duration": 1,
+      "title": "Jiu-jitsu",
+      "description": "Kampsportsträning",
+      "created_at": "2025-10-09 19:53:35",
+      "repeat_pattern": "sön",
+      "repeat_until": "2026-01-04",
+      "reminder": 0
+    },
+    {
+      "id": 37,
+      "user": "Olle",
+      "date": "2025-10-06",
+      "time": "16:50",
+      "duration": 1,
+      "title": "Blåskul",
+      "description": "Musiklektion",
+      "created_at": "2025-10-09 19:53:35",
+      "repeat_pattern": "tor",
+      "repeat_until": "2026-01-04",
+      "reminder": 0
+    },
+    {
+      "id": 35,
+      "user": "Olle",
+      "date": "2025-10-06",
+      "time": "17:00",
+      "duration": 1,
+      "title": "Handbollsträning",
+      "description": "Träning med laget",
+      "created_at": "2025-10-09 19:53:35",
+      "repeat_pattern": "ons",
+      "repeat_until": "2026-01-04",
+      "reminder": 0
+    },
+    {
+      "id": 38,
+      "user": "Ellen",
+      "date": "2025-11-03",
+      "time": "17:00",
+      "duration": 1,
+      "title": "Fotbollsträning",
+      "description": "Träning",
+      "created_at": "2025-10-09 19:54:23",
+      "repeat_pattern": "mån",
+      "repeat_until": "2026-02-01",
+      "reminder": 0
+    }
+  ]
+}
