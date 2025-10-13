@@ -1418,118 +1418,6 @@ def main():
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
 
-    # Sticky AI-container längst ner - start wrapper
-    st.markdown('<div class="sticky-chat-container"><div class="sticky-chat-inner">', unsafe_allow_html=True)
-
-    # JavaScript för notifikationer och sticky fix
-    st.markdown("""
-    <script>
-    // Push-notifikationer setup
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-        navigator.serviceWorker.register('/sw.js').catch(function(err) {
-            console.log('Service Worker registration failed:', err);
-        });
-    }
-
-    // Begär notifikationspermission
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(function(permission) {
-            if (permission === 'granted') {
-                console.log('Notification permission granted');
-            }
-        });
-    }
-
-    // Funktion för att schemalägga notifikation
-    function scheduleNotification(eventTitle, eventDate, eventTime) {
-        if (!('Notification' in window)) {
-            console.log('This browser does not support notifications');
-            return;
-        }
-
-        if (Notification.permission !== 'granted') {
-            console.log('Notification permission not granted');
-            return;
-        }
-
-        // Beräkna tid till händelsen minus 15 minuter
-        const eventDateTime = new Date(eventDate + ' ' + eventTime);
-        const reminderTime = new Date(eventDateTime.getTime() - 15 * 60000);
-        const now = new Date();
-        const timeUntilReminder = reminderTime.getTime() - now.getTime();
-
-        if (timeUntilReminder > 0) {
-            setTimeout(function() {
-                new Notification('📅 Påminnelse: ' + eventTitle, {
-                    body: 'Börjar om 15 minuter (' + eventTime + ')',
-                    icon: '📅',
-                    requireInteraction: true
-                });
-            }, timeUntilReminder);
-        }
-    }
-
-    // Läs events från localStorage och schemalägg notifikationer
-    function loadAndScheduleReminders() {
-        // Detta skulle kunna kopplas till Streamlit session state
-        // För nu: demonstration av funktionaliteten
-        console.log('Reminder system active');
-    }
-
-    // Kör när sidan laddas
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', loadAndScheduleReminders);
-    } else {
-        loadAndScheduleReminders();
-    }
-
-    // FIXA STICKY CONTAINER - Flytta till body för att undvika scroll-problem
-    function fixStickyContainer() {
-        const container = document.querySelector('.sticky-chat-container');
-        if (container && container.parentElement.tagName !== 'BODY') {
-            console.log('[STICKY FIX] Moving sticky container to body');
-            document.body.appendChild(container);
-        }
-    }
-
-    // Kör fix när sidan laddas och efter Streamlit-uppdateringar
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fixStickyContainer);
-    } else {
-        fixStickyContainer();
-    }
-
-    // Kör fix efter varje Streamlit-omritning
-    setInterval(fixStickyContainer, 500);
-
-    // Observera DOM-ändringar och fixa sticky
-    const observer = new MutationObserver(fixStickyContainer);
-    observer.observe(document.body, { childList: true, subtree: true });
-    </script>
-    """, unsafe_allow_html=True)
-
-    # AI textinput (inline i sticky container)
-    user_input = st.text_input("AI",
-                                placeholder="Fråga eller boka...",
-                                key="ai_search",
-                                label_visibility="collapsed")
-
-    # Stäng sticky container wrappers
-    st.markdown('</div></div>', unsafe_allow_html=True)
-
-    if user_input:
-        # Anropa AI:n (lokalt på GPU)
-        with st.spinner('🤔 Tänker...'):
-            ai_response = call_gpt_local(user_input, st.session_state['current_week'].year, st.session_state['current_week'].month)
-
-        # Visa svaret tillfälligt med auto-dismiss
-        if "✓" in ai_response:  # Om bokning genomfördes
-            st.success(ai_response)
-            # Uppdatera kalendern omedelbart
-            st.rerun()
-        else:
-            # Visa svar för frågor
-            st.info(ai_response)
 
     # Hämta händelser för aktuell vecka
     week_start = st.session_state['current_week']
@@ -1874,6 +1762,68 @@ def main():
         if st.button("➡️", use_container_width=True, key="next_week_bottom"):
             st.session_state['current_week'] += timedelta(days=7)
             st.rerun()
+
+    # Extra padding för sticky AI-fält
+    st.markdown('<div style="height: 80px;"></div>', unsafe_allow_html=True)
+
+    # ==================== STICKY AI FIELD ====================
+    # Lägg detta SIST i main() för bäst sticky-funktion
+
+    st.markdown('<div class="sticky-chat-container" id="sticky-ai-field"><div class="sticky-chat-inner">', unsafe_allow_html=True)
+
+    # AI textinput
+    user_input = st.text_input("AI",
+                                placeholder="Fråga eller boka...",
+                                key="ai_search",
+                                label_visibility="collapsed")
+
+    st.markdown('</div></div>', unsafe_allow_html=True)
+
+    # JavaScript för sticky fix OCH notifikationer
+    st.markdown("""
+    <script>
+    // FIXA STICKY CONTAINER - Flytta till body för att undvika scroll-problem
+    function fixStickyContainer() {
+        const container = document.querySelector('.sticky-chat-container');
+        if (container && container.parentElement.tagName !== 'BODY') {
+            console.log('[STICKY FIX] Moving sticky container to body');
+            document.body.appendChild(container);
+        }
+    }
+
+    // Kör fix när sidan laddas och efter Streamlit-uppdateringar
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fixStickyContainer);
+    } else {
+        fixStickyContainer();
+    }
+
+    // Kör fix efter varje Streamlit-omritning
+    setInterval(fixStickyContainer, 500);
+
+    // Observera DOM-ändringar och fixa sticky
+    const observer = new MutationObserver(fixStickyContainer);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Push-notifikationer setup
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+            console.log('Service Worker registration failed:', err);
+        });
+    }
+    </script>
+    """, unsafe_allow_html=True)
+
+    # Hantera AI input
+    if user_input:
+        with st.spinner('🤔 Tänker...'):
+            ai_response = call_gpt_local(user_input, st.session_state['current_week'].year, st.session_state['current_week'].month)
+
+        if "✓" in ai_response:
+            st.success(ai_response)
+            st.rerun()
+        else:
+            st.info(ai_response)
 
 if __name__ == "__main__":
     main()
