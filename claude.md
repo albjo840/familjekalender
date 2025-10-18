@@ -185,12 +185,18 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
   - Händelser försvinner aldrig mer!
   - Automatisk synkronisering mellan lokal cache och molnet
   - Gratis PostgreSQL-databas med oändlig kapacitet för familjekalender
+  - Import-verktyg för befintliga händelser
+- ✅ **Telegram-påminnelser** - FUNGERAR FULLT UT
+  - Push-notiser till telefonen 15 min innan händelser
+  - Testad och verifierad för Albin och Maria
+  - 100% gratis via Telegram Bot API
+  - Fungerar även när appen är stängd
+  - Multi-användare support för hela familjen
 - ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - 9x kraftfullare AI via Hugging Face
 - ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
 - ✅ **Sticky AI-chat** - Röstknapp + textinput följer med längst ner (chatbot-stil)
   - Förstärkt CSS med !important och z-index 999999 för att överrida Streamlit
   - Flera selektorvarianter för maximal kompatibilitet
-- ✅ **Telegram-påminnelser** - Push-notiser till telefonen 15 min innan händelser
 - ✅ **Komplett UI återställd** - Veckovisning, färger, återkommande händelser
 - ✅ Återkommande händelser med slutdatum
 - ✅ Session state-fix för Streamlit
