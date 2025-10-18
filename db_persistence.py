@@ -75,7 +75,8 @@ class DatabasePersistence:
             # Hämta alla händelser från lokal databas
             c.execute("""
                 SELECT id, user, date, time, duration, title, description,
-                       created_at, repeat_pattern, repeat_until, reminder
+                       created_at, repeat_pattern, repeat_until,
+                       COALESCE(reminder, 0) as reminder
                 FROM events
                 ORDER BY date, time
             """)
