@@ -24,12 +24,25 @@ streamlit run app.py
 
 ### Konfiguration (REKOMMENDERAT)
 
-För att aktivera AI-assistenten:
+#### 1. Supabase Database (VIKTIGT - för persistent lagring)
+
+**OBS: Detta löser problemet med att händelser försvinner när appen startar om!**
+
+1. Skapa ett gratis konto på Supabase: https://supabase.com
+2. Skapa ett nytt projekt och en `events` tabell
+3. Lägg till Supabase credentials i `.streamlit/secrets.toml`:
+```toml
+SUPABASE_URL = "https://xxxxxxxxxxxxx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxxx"
+```
+
+**📖 Fullständig guide**: Se `SUPABASE_SETUP.md` för steg-för-steg instruktioner!
+
+#### 2. AI-assistent (Hugging Face)
 
 1. Skapa ett gratis konto på Hugging Face: https://huggingface.co/join
 2. Skapa en API-nyckel: https://huggingface.co/settings/tokens
-3. Skapa en `.streamlit/secrets.toml` fil (kopiera från secrets.toml.example)
-4. Lägg till din Hugging Face API-nyckel:
+3. Lägg till din Hugging Face API-nyckel i `.streamlit/secrets.toml`:
 ```toml
 HUGGINGFACE_API_KEY = "hf_xxxxxxxxxxxxx"
 ```
@@ -71,6 +84,10 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 - **Redigera händelser**: Ändra tid, varaktighet, beskrivning
 - **Ta bort händelser**: Enskilda eller alla förekomster av återkommande händelser
 - **Veckonavigation**: Enkel navigering mellan veckor
+- **Persistent lagring**: Supabase molndatabas - händelser försvinner aldrig!
+  - Automatisk synkronisering till molnet
+  - Fungerar även när Streamlit Cloud startar om
+  - Lokal JSON backup som extra säkerhet
 
 ### Design
 - **Apple-liknande UI**: Modern design med gradienter och glasmorfism
@@ -87,8 +104,10 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 
 ### Backend
 - **Python 3.7+**: Huvudspråk
-- **SQLite**: Lokal databas för händelser
+- **Supabase**: Molnbaserad PostgreSQL-databas (persistent lagring)
+- **SQLite**: Lokal cache för snabb åtkomst
 - **Pandas**: Datahantering
+- **Automatisk synkronisering**: Mellan lokal cache och molndatabas
 
 ### AI/ML
 - **Hugging Face Inference API**: Qwen 2.5 72B Instruct modell
@@ -162,6 +181,10 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar (Oktober 2025)
+- ✅ **Supabase molndatabas** - Persistent lagring som överlever Streamlit Cloud restart
+  - Händelser försvinner aldrig mer!
+  - Automatisk synkronisering mellan lokal cache och molnet
+  - Gratis PostgreSQL-databas med oändlig kapacitet för familjekalender
 - ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - 9x kraftfullare AI via Hugging Face
 - ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
 - ✅ **Sticky AI-chat** - Röstknapp + textinput följer med längst ner (chatbot-stil)
