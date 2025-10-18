@@ -971,8 +971,8 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API - använder Qwen 2.5 72B Instruct (kraftfullare och bättre på svenska)
-        API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
+        # Hugging Face Inference API - använder Qwen 2.5 Coder Instruct (tillgänglig via Inference API)
+        API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-32B-Instruct"
         headers = {"Authorization": f"Bearer {hf_token}"}
 
         # Formatera prompt för Qwen 2.5 (använder ChatML format)
