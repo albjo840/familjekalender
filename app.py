@@ -1477,6 +1477,11 @@ def main():
                     edit_desc = st.text_area("Beskrivning:", value=event.get('description', ''),
                                             key=f"edit_desc_{event['id']}")
 
+                    # Påminnelse
+                    edit_reminder = st.checkbox("🔔 Påminnelse 15 min innan",
+                                               value=bool(event.get('reminder', 0)),
+                                               key=f"edit_reminder_{event['id']}")
+
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button("💾 Spara", key=f"save_{event['id']}", use_container_width=True):
@@ -1490,8 +1495,11 @@ def main():
                             # Uppdatera händelse
                             conn = sqlite3.connect(DB_PATH)
                             c = conn.cursor()
-                            c.execute('UPDATE events SET user=?, title=?, time=?, description=?, duration=? WHERE id=?',
-                                    (edit_user, edit_title, edit_time, edit_desc, new_duration, event['id']))
+                            c.execute('''UPDATE events
+                                        SET user=?, title=?, time=?, description=?, duration=?, reminder=?, reminder_sent=0
+                                        WHERE id=?''',
+                                    (edit_user, edit_title, edit_time, edit_desc, new_duration,
+                                     1 if edit_reminder else 0, event['id']))
                             conn.commit()
                             backup_database()
                             conn.close()
