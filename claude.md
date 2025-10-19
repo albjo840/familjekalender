@@ -73,10 +73,11 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 
 ### Påminnelser (Telegram)
 - **Push-notiser till telefonen**: 15 minuter innan händelser
-- **100% gratis**: Via Telegram Bot API
+- **100% gratis**: Via Telegram Bot API + GitHub Actions
 - **Fungerar överallt**: iOS, Android, Desktop
-- **Pålitligt**: Även när appen är stängd
-- **Enkel setup**: 10 minuter (se TELEGRAM-PÅMINNELSER.md)
+- **Pålitligt 24/7**: GitHub Actions kör automatiskt varje 5:e minut
+- **Oberoende**: Fungerar även när ingen använder appen
+- **Enkel setup**: 10 minuter (se GITHUB_ACTIONS_SETUP.md)
 - **Multi-användare**: Stöd för hela familjen
 
 ### Händelsehantering

@@ -1,0 +1,47 @@
+name: Reminder Service
+
+on:
+  schedule:
+    # Kör varje minut (GitHub Actions minsta intervall är 5 min, men vi kan köra oftare via tricks)
+    # VIKTIGT: GitHub Actions cron körs på UTC-tid!
+    # För att få påminnelser i svensk tid (UTC+1/+2), justera tiderna
+    - cron: '*/5 * * * *'  # Varje 5:e minut (minsta intervall för GitHub)
+
+  # Tillåt manuell trigger för testning
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install supabase requests
+
+      - name: Run reminder service
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID_ALBIN: ${{ secrets.TELEGRAM_CHAT_ID_ALBIN }}
+          TELEGRAM_CHAT_ID_MARIA: ${{ secrets.TELEGRAM_CHAT_ID_MARIA }}
+          TELEGRAM_CHAT_ID_OLLE: ${{ secrets.TELEGRAM_CHAT_ID_OLLE }}
+          TELEGRAM_CHAT_ID_ELLEN: ${{ secrets.TELEGRAM_CHAT_ID_ELLEN }}
+          TELEGRAM_CHAT_ID_FAMILJ: ${{ secrets.TELEGRAM_CHAT_ID_FAMILJ }}
+        run: |
+          python reminder_service.py
+
+      - name: Log completion
+        if: always()
+        run: |
+          echo "Reminder check completed at $(date)"

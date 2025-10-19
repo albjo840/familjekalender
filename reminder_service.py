@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""
+Reminder Service - Bakgrundsprocess för Telegram-påminnelser
+=============================================================
+Körs via GitHub Actions varje minut för att skicka påminnelser
+oberoende av om någon använder appen.
+
+Kräver miljövariabler:
+- SUPABASE_URL
+- SUPABASE_KEY
+- TELEGRAM_BOT_TOKEN
+- TELEGRAM_CHAT_ID_ALBIN
+- TELEGRAM_CHAT_ID_MARIA
+- TELEGRAM_CHAT_ID_OLLE (valfritt)
+- TELEGRAM_CHAT_ID_ELLEN (valfritt)
+"""
+
+import os
+import sys
+from datetime import datetime, timedelta
+import requests
+
+def send_telegram_message(bot_token, chat_id, message):
+    """Skickar ett Telegram-meddelande"""
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"[ERROR] Telegram send failed: {e}")
+        return False
+
+def check_and_send_reminders():
+    """Huvudfunktion som kollar och skickar påminnelser"""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Checking for reminders...")
+
+    # Hämta miljövariabler
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY')
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+
+    if not all([supabase_url, supabase_key, bot_token]):
+        print("[ERROR] Missing required environment variables!")
+        print(f"  SUPABASE_URL: {'✓' if supabase_url else '✗'}")
+        print(f"  SUPABASE_KEY: {'✓' if supabase_key else '✗'}")
+        print(f"  TELEGRAM_BOT_TOKEN: {'✓' if bot_token else '✗'}")
+        return 1
+
+    try:
+        from supabase import create_client
+
+        # Anslut till Supabase
+        supabase = create_client(supabase_url, supabase_key)
+        print("[SUPABASE] Connected successfully")
+
+        # Hämta dagens datum
+        now = datetime.now()
+        today = now.strftime('%Y-%m-%d')
+
+        # Tidsfönster: 14-16 minuter framåt
+        reminder_time_start = now + timedelta(minutes=14)
+        reminder_time_end = now + timedelta(minutes=16)
+
+        print(f"[TIME] Looking for events between {reminder_time_start.strftime('%H:%M')} and {reminder_time_end.strftime('%H:%M')}")
+
+        # Hämta events med påminnelse som inte skickats
+        response = supabase.table('events').select('*').eq('date', today).eq('reminder', 1).execute()
+
+        events = [e for e in response.data if not e.get('reminder_sent', False)]
+        print(f"[EVENTS] Found {len(events)} events with unsent reminders today")
+
+        reminders_sent = 0
+
+        for event in events:
+            event_time_str = event['time']
+            event_datetime = datetime.strptime(f"{today} {event_time_str}", '%Y-%m-%d %H:%M')
+
+            # Kolla om eventet är i påminnelsefönstret
+            if reminder_time_start <= event_datetime <= reminder_time_end:
+                user = event['user']
+                title = event['title']
+
+                print(f"[MATCH] Event '{title}' for {user} at {event_time_str} is in reminder window")
+
+                # Hämta chat ID för användaren
+                chat_id_key = f"TELEGRAM_CHAT_ID_{user.upper()}"
+                chat_id = os.getenv(chat_id_key)
+
+                if not chat_id:
+                    print(f"[SKIP] No Telegram chat ID configured for {user} ({chat_id_key})")
+                    continue
+
+                # Skapa meddelande
+                message = f"""📅 *Påminnelse: {title}*
+
+🕐 Börjar om 15 minuter ({event_time_str})
+👤 {user}
+📆 {today}
+
+God förberedelse! 🙂"""
+
+                # Skicka påminnelse
+                if send_telegram_message(bot_token, chat_id, message):
+                    print(f"[SENT] Reminder sent to {user}")
+
+                    # Markera som skickad i Supabase
+                    supabase.table('events').update({'reminder_sent': True}).eq('id', event['id']).execute()
+                    print(f"[UPDATE] Marked event {event['id']} as reminder_sent=true")
+
+                    reminders_sent += 1
+                else:
+                    print(f"[FAILED] Could not send reminder to {user}")
+
+        print(f"[SUMMARY] Sent {reminders_sent} reminder(s)")
+        return 0
+
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(check_and_send_reminders())

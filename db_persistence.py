@@ -225,8 +225,12 @@ class DatabasePersistence:
             print(f"[BACKUP ERROR] {e}")
             return False
 
-    def restore_from_json(self) -> bool:
-        """Återställer händelser från JSON-backup"""
+    def restore_from_json(self, force: bool = False) -> bool:
+        """Återställer händelser från JSON-backup
+
+        Args:
+            force: Om True, återställ även om databasen redan har data (raderar befintlig data först)
+        """
         if not os.path.exists(self.backup_json_path):
             print(f"[RESTORE] No backup file found at {self.backup_json_path}")
             return False
@@ -248,10 +252,16 @@ class DatabasePersistence:
             c.execute("SELECT COUNT(*) FROM events")
             existing_count = c.fetchone()[0]
 
-            if existing_count > 0:
+            if existing_count > 0 and not force:
                 print(f"[RESTORE] Database already has {existing_count} events. Skipping restore.")
                 conn.close()
                 return False
+
+            # Om force=True, rensa befintlig data först
+            if existing_count > 0 and force:
+                print(f"[RESTORE] Force mode: Clearing {existing_count} existing events")
+                c.execute("DELETE FROM events")
+                conn.commit()
 
             # Återställ händelser
             for event in events:

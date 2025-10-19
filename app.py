@@ -521,10 +521,7 @@ def init_database():
     """Initierar databas med robust persistence"""
     global db_persistence
 
-    # Initiera persistence layer (hanterar automatisk restore)
-    db_persistence = create_persistent_db(DB_PATH)
-
-    # Skapa databas och tabeller
+    # VIKTIGT: Skapa databas och tabeller FÖRST (innan persistence försöker läsa från den)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
@@ -541,7 +538,7 @@ def init_database():
         )
     ''')
 
-    # Lägg till duration-kolumn om den inte finns
+    # Lägg till kolumner om de inte finns
     c.execute("PRAGMA table_info(events)")
     columns = [column[1] for column in c.fetchall()]
     if 'duration' not in columns:
@@ -552,9 +549,17 @@ def init_database():
         c.execute('ALTER TABLE events ADD COLUMN repeat_until TEXT DEFAULT NULL')
     if 'reminder' not in columns:
         c.execute('ALTER TABLE events ADD COLUMN reminder BOOLEAN DEFAULT 0')
+    if 'reminder_sent' not in columns:
+        c.execute('ALTER TABLE events ADD COLUMN reminder_sent BOOLEAN DEFAULT 0')
     conn.commit()
+    conn.close()
 
-    # Kolla om vi precis återställde och skapa en backup direkt
+    # Nu kan vi initiera persistence layer (kommer automatiskt återställa från Supabase om lokal DB är tom)
+    db_persistence = create_persistent_db(DB_PATH)
+
+    # Kolla hur många events vi har efter restore
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM events")
     count = c.fetchone()[0]
     conn.close()
@@ -877,37 +882,51 @@ God förberedelse! 🙂"""
         return False
 
 def check_and_send_reminders():
-    """Kollar efter händelser som behöver påminnelse (körs varje minut)"""
+    """Kollar efter händelser som behöver påminnelse (körs varje gång sidan laddas)"""
     try:
         now = datetime.now()
-        # Kolla 15-16 minuter framåt för att fånga alla som ska få påminnelse
-        reminder_time_start = now + timedelta(minutes=14, seconds=30)
-        reminder_time_end = now + timedelta(minutes=15, seconds=30)
+        # Kolla 14-16 minuter framåt för att fånga alla som ska få påminnelse
+        # Bredare fönster för att hantera sekund-avrundning
+        reminder_time_start = now + timedelta(minutes=14)
+        reminder_time_end = now + timedelta(minutes=16)
 
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
 
-        # Hämta händelser med påminnelse som är 15 min framåt i tiden
+        # Hämta händelser med påminnelse som INTE redan skickats
         c.execute('''
-            SELECT user, date, time, title, reminder
+            SELECT id, user, date, time, title
             FROM events
             WHERE reminder = 1
+              AND (reminder_sent = 0 OR reminder_sent IS NULL)
               AND date = ?
         ''', (now.strftime('%Y-%m-%d'),))
 
         events = c.fetchall()
-        conn.close()
 
+        reminders_sent = 0
         for event in events:
-            user, date_str, time_str, title, reminder = event
+            event_id, user, date_str, time_str, title = event
             event_datetime = datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M')
 
             # Skicka om händelsen är 15 minuter bort
             if reminder_time_start <= event_datetime <= reminder_time_end:
-                send_telegram_reminder(user, title, time_str, date_str)
+                if send_telegram_reminder(user, title, time_str, date_str):
+                    # Markera som skickad
+                    c.execute('UPDATE events SET reminder_sent = 1 WHERE id = ?', (event_id,))
+                    conn.commit()
+                    reminders_sent += 1
+                    print(f"[REMINDER] Sent to {user} for '{title}' at {time_str}")
+
+        conn.close()
+
+        if reminders_sent > 0:
+            print(f"[REMINDER] Sent {reminders_sent} reminder(s)")
 
     except Exception as e:
-        print(f"Reminder check fel: {e}")
+        print(f"[REMINDER ERROR] {e}")
+        import traceback
+        traceback.print_exc()
 
 def call_gpt_local(user_message, year, month):
     """Anropar Hugging Face API för AI-assistans"""
@@ -1086,8 +1105,64 @@ def main():
                         del st.session_state[key]
                 st.rerun()
 
+            st.markdown("---")
+            st.markdown("**📦 Backup & Återställning**")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Backup nu", help="Sparar till Supabase + JSON"):
+                    try:
+                        backup_database()
+                        st.success("✅ Backup klar!")
+                    except Exception as e:
+                        st.error(f"❌ Fel: {e}")
+
+            with col2:
+                if st.button("☁️ Från Supabase", help="Återställ från molnet"):
+                    try:
+                        if db_persistence and db_persistence.restore_from_supabase():
+                            st.success("✅ Återställt från Supabase!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Supabase-återställning misslyckades")
+                    except Exception as e:
+                        st.error(f"❌ Fel: {e}")
+
+            # Visa backup-info
+            if os.path.exists('familjekalender.db.json'):
+                try:
+                    import json
+                    with open('familjekalender.db.json', 'r') as f:
+                        backup_data = json.load(f)
+                    backup_time = backup_data.get('backup_time', 'Okänd')
+                    event_count = len(backup_data.get('events', []))
+                    st.caption(f"📄 JSON: {event_count} events från {backup_time[:10]}")
+                except:
+                    pass
+
+            # Visa nuvarande antal events
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM events")
+                current_count = c.fetchone()[0]
+                conn.close()
+                st.caption(f"💾 Nuvarande: {current_count} events i databasen")
+            except:
+                pass
+
     # Kolla och skicka Telegram-påminnelser (körs varje gång sidan laddas)
     check_and_send_reminders()
+
+    # Auto-refresh varje minut för att kolla påminnelser
+    # Detta gör att check_and_send_reminders() körs kontinuerligt
+    st.markdown("""
+        <script>
+            setTimeout(function() {
+                window.parent.location.reload();
+            }, 60000);  // Reload page every 60 seconds
+        </script>
+    """, unsafe_allow_html=True)
 
     # Titel och färgförklaring
     st.markdown("""
