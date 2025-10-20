@@ -3,10 +3,16 @@
 Test Telegram bot connection
 """
 import requests
+import os
 
-TELEGRAM_BOT_TOKEN = "***REMOVED***"
-TELEGRAM_CHAT_ID_ALBIN = "***REMOVED***"
-TELEGRAM_CHAT_ID_MARIA = "***REMOVED***"
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID_ALBIN = os.getenv('TELEGRAM_CHAT_ID_ALBIN')
+TELEGRAM_CHAT_ID_MARIA = os.getenv('TELEGRAM_CHAT_ID_MARIA')
+
+if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID_ALBIN or not TELEGRAM_CHAT_ID_MARIA:
+    print("❌ Error: Missing environment variables!")
+    print("Please set: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID_ALBIN, TELEGRAM_CHAT_ID_MARIA")
+    exit(1)
 
 print("=" * 60)
 print("TELEGRAM BOT TEST")

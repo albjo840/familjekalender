@@ -31,8 +31,7 @@
 
 **Setup Status:** ✅ KLAR
 - Bot Token: Konfigurerad
-- Albin Chat ID: Verifierad (***REMOVED***)
-- Maria Chat ID: Verifierad (***REMOVED***)
+- User Chat IDs: Verifierade
 - Telegram-integration: Testad och fungerar
 
 **Testresultat:**

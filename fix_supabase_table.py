@@ -2,10 +2,16 @@
 """
 Fix Supabase table - lägg till reminder_sent kolumn
 """
+import os
 from supabase import create_client
 
-SUPABASE_URL = 'https://***REMOVED***'
-SUPABASE_KEY = '***REMOVED***'
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ Error: Missing environment variables!")
+    print("Please set: SUPABASE_URL and SUPABASE_KEY")
+    exit(1)
 
 print("=" * 60)
 print("FIXING SUPABASE TABLE")
@@ -21,7 +27,7 @@ try:
     print("\n⚠️  VIKTIGT:")
     print("Supabase-tabellen saknar kolumnen 'reminder_sent'.")
     print("\nDu måste lägga till den via Supabase Dashboard:")
-    print("\n1. Gå till: https://supabase.com/dashboard/project/xbhqtqjriiytkcnprteb/editor")
+    print("\n1. Gå till: https://supabase.com/dashboard (ditt projekt)")
     print("2. Välj 'events' tabellen")
     print("3. Klicka på 'New Column' eller gå till SQL Editor")
     print("4. Kör denna SQL:")

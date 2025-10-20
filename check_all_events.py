@@ -8,8 +8,13 @@ from datetime import datetime
 from supabase import create_client, Client
 
 # Konfigurera Supabase
-supabase_url = os.getenv('SUPABASE_URL', 'https://***REMOVED***')
-supabase_key = os.getenv('SUPABASE_KEY', '***REMOVED***')
+supabase_url = os.getenv('SUPABASE_URL')
+supabase_key = os.getenv('SUPABASE_KEY')
+
+if not supabase_url or not supabase_key:
+    print("❌ Error: Missing environment variables!")
+    print("Please set: SUPABASE_URL and SUPABASE_KEY")
+    exit(1)
 
 supabase: Client = create_client(supabase_url, supabase_key)
 

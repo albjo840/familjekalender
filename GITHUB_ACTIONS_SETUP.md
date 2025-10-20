@@ -21,11 +21,11 @@ Lägg till följande secrets:
 
 | Secret Name | Värde | Hämta från |
 |------------|-------|-----------|
-| `SUPABASE_URL` | `https://***REMOVED***` | `.streamlit/secrets.toml` |
+| `SUPABASE_URL` | `https://your-project.supabase.co` | `.streamlit/secrets.toml` |
 | `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | `.streamlit/secrets.toml` |
-| `TELEGRAM_BOT_TOKEN` | `8405404185:AAHGajxTL...` | `.streamlit/secrets.toml` |
-| `TELEGRAM_CHAT_ID_ALBIN` | `***REMOVED***` | `.streamlit/secrets.toml` |
-| `TELEGRAM_CHAT_ID_MARIA` | `***REMOVED***` | `.streamlit/secrets.toml` |
+| `TELEGRAM_BOT_TOKEN` | `1234567890:ABC...` | `.streamlit/secrets.toml` |
+| `TELEGRAM_CHAT_ID_ALBIN` | `Your chat ID` | `.streamlit/secrets.toml` |
+| `TELEGRAM_CHAT_ID_MARIA` | `Your chat ID` | `.streamlit/secrets.toml` |
 | `TELEGRAM_CHAT_ID_OLLE` | (frivilligt) | Om ni vill att Olle får påminnelser |
 | `TELEGRAM_CHAT_ID_ELLEN` | (frivilligt) | Om ni vill att Ellen får påminnelser |
 | `TELEGRAM_CHAT_ID_FAMILJ` | (frivilligt) | För gemensamma påminnelser |
