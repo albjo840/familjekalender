@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 from db_persistence import create_persistent_db
+from ai_memory import AIMemory  # AI långtidsminne med pgvector
 
 # Konfigurera sidan
 st.set_page_config(
@@ -929,31 +930,48 @@ def check_and_send_reminders():
         traceback.print_exc()
 
 def call_gpt_local(user_message, year, month):
-    """Anropar Groq API för AI-assistans (snabb och gratis!)"""
+    """Anropar Groq API för AI-assistans med långtidsminne (snabb och gratis!)"""
 
-    # Hämta API-nyckel från Streamlit secrets
+    # Hämta API-nycklar från Streamlit secrets
     try:
         groq_token = st.secrets.get("GROQ_API_KEY", "")
+        supabase_url = st.secrets.get("SUPABASE_URL", "")
+        supabase_key = st.secrets.get("SUPABASE_KEY", "")
     except:
         groq_token = ""
+        supabase_url = ""
+        supabase_key = ""
 
     # Kräver API-nyckel
     if not groq_token:
         return "⚠️ Groq API-nyckel saknas. Lägg till GROQ_API_KEY i Streamlit secrets."
+
+    # Initiera AI-minne (om Supabase finns)
+    ai_memory = None
+    memory_context = ""
+    if supabase_url and supabase_key:
+        try:
+            ai_memory = AIMemory(supabase_url, supabase_key, groq_token)
+            # Bygg kontext från tidigare minnen
+            memory_context = ai_memory.build_memory_context(user_message)
+            if memory_context:
+                memory_context = f"\n\n🧠 LÅNGTIDSMINNE:\n{memory_context}\n"
+        except Exception as e:
+            print(f"AI-minne fel: {e}")
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
 
     # Systemmeddelande med instruktioner
     today = datetime.now()
-    system_message = f"""Du är en intelligent kalenderassistent för en familjekalender.
+    system_message = f"""Du är en intelligent kalenderassistent för en familjekalender med långtidsminne.
 
 ANVÄNDARE: Albin, Maria, Olle, Ellen, Familj
 
 DAGENS DATUM: {today.strftime('%Y-%m-%d')} ({today.strftime('%A, %d %B %Y')})
 
 AKTUELL KALENDER ({year}-{month:02d}):
-{calendar_context}
+{calendar_context}{memory_context}
 
 DINA UPPGIFTER:
 1. SVARA PÅ FRÅGOR om kalendern (vad finns bokat, lediga tider, etc.) - ANVÄND ALDRIG BOOK_EVENT för frågor!
@@ -1072,6 +1090,28 @@ När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
             except Exception as e:
                 ai_response += f"\n\n⚠️ Fel vid bokning: {str(e)}"
+
+        # 🧠 Spara konversationen till långtidsminne
+        if ai_memory:
+            try:
+                # Detektera konversationstyp
+                conv_type = "booking" if "BOOK_EVENT|" in ai_response else "question"
+
+                # Extrahera metadata om det är en bokning
+                metadata = {}
+                if conv_type == "booking":
+                    metadata["booking_attempted"] = True
+
+                # Spara minnet
+                ai_memory.save_memory(
+                    user_message=user_message,
+                    ai_response=ai_response,
+                    conversation_type=conv_type,
+                    metadata=metadata
+                )
+                print("✅ Konversation sparad till långtidsminne")
+            except Exception as mem_err:
+                print(f"Kunde inte spara till minne: {mem_err}")
 
         return ai_response
 
