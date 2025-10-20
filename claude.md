@@ -190,6 +190,30 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar (Oktober 2025)
+- ✅ **AI duplicerade bokningar fixat (2025-10-20)**
+  - Fixade problem där AI:n skapade flera identiska bokningar
+  - Detekterar och ignorerar multipla BOOK_EVENT-kommandon i samma svar
+  - Tydligare AI-instruktioner: bara ETT BOOK_EVENT per svar
+  - Rensat debug-meddelanden från UI
+  - Skapat verktyg för att rensa duplicerade händelser i databasen
+- ✅ **AI långtidsminne med pgvector (2025-10-20)**
+  - Implementerat AI-minnessystem med semantisk sökning
+  - Sparar alla konversationer för framtida kontext
+  - Lär sig användarpreferenser över tid
+  - Använder pgvector i Supabase för vektorsökning
+  - SQL-migration och Python-integration klart (`ai_memory.py`)
+  - Fullständig setup-guide i `AI_MEMORY_SETUP.md`
+- ✅ **Telegram-påminnelser diagnostik (2025-10-20)**
+  - Verifierat att Telegram-systemet fungerar korrekt
+  - reminder_sent kolumn finns i Supabase
+  - GitHub Actions workflow kör var 5:e minut
+  - Skapat diagnostikverktyg (`diagnose_reminders.py`, `check_all_events.py`)
+  - Systemet skickar påminnelser 15 min innan händelser
+- ✅ **Migrerat till Groq API (2025-10-20)**
+  - Bytt från Hugging Face till Groq för AI-funktionalitet
+  - Använder Llama 3.3 70B Versatile (100% gratis, extremt snabbt)
+  - Fixade 404-fel från Hugging Face Inference API
+  - 10-100x snabbare responser än tidigare
 - ✅ **Telegram-påminnelser fixade (2025-10-19)**
   - Diagnostiserade och löste problemet med utebliva påminnelser
   - Supabase-tabellen behövde kolumnen `reminder_sent` (BOOLEAN DEFAULT FALSE)
@@ -207,7 +231,6 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
   - 100% gratis via Telegram Bot API
   - Fungerar även när appen är stängd
   - Multi-användare support för hela familjen
-- ✅ **Uppgraderad till Qwen 2.5 72B Instruct** - 9x kraftfullare AI via Hugging Face
 - ✅ **API-baserad AI** - Fungerar på alla enheter (desktop, mobil, tablet)
 - ✅ **Sticky AI-chat** - Röstknapp + textinput följer med längst ner (chatbot-stil)
   - Förstärkt CSS med !important och z-index 999999 för att överrida Streamlit
