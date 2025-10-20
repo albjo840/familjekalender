@@ -38,16 +38,16 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxxx"
 
 **📖 Fullständig guide**: Se `SUPABASE_SETUP.md` för steg-för-steg instruktioner!
 
-#### 2. AI-assistent (Hugging Face)
+#### 2. AI-assistent (Groq)
 
-1. Skapa ett gratis konto på Hugging Face: https://huggingface.co/join
-2. Skapa en API-nyckel: https://huggingface.co/settings/tokens
-3. Lägg till din Hugging Face API-nyckel i `.streamlit/secrets.toml`:
+1. Skapa ett gratis konto på Groq: https://console.groq.com
+2. Skapa en API-nyckel från API Keys-sektionen
+3. Lägg till din Groq API-nyckel i `.streamlit/secrets.toml`:
 ```toml
-HUGGINGFACE_API_KEY = "hf_xxxxxxxxxxxxx"
+GROQ_API_KEY = "gsk_xxxxxxxxxxxxx"
 ```
 
-Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inference API)
+Modell som används: **Llama 3.3 70B Versatile** (100% gratis, extremt snabb via Groq API)
 
 ## Funktioner
 
@@ -77,8 +77,13 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 - **Fungerar överallt**: iOS, Android, Desktop
 - **Pålitligt 24/7**: GitHub Actions kör automatiskt varje 5:e minut
 - **Oberoende**: Fungerar även när ingen använder appen
-- **Enkel setup**: 10 minuter (se GITHUB_ACTIONS_SETUP.md)
 - **Multi-användare**: Stöd för hela familjen
+
+**Setup-krav:**
+1. Lägg till kolumn i Supabase: `ALTER TABLE events ADD COLUMN reminder_sent BOOLEAN DEFAULT FALSE;`
+2. Konfigurera GitHub Secrets (SUPABASE_URL, SUPABASE_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID_*)
+3. Telegram-bot: @familjekalender_bot
+4. För att undvika GitHub mail-spam: Stäng av Actions-notiser i https://github.com/settings/notifications
 
 ### Händelsehantering
 - **Lägg till händelser**: Via formulär eller AI-assistent
@@ -111,10 +116,10 @@ Modell som används: **Qwen 2.5 72B Instruct** (gratis via Hugging Face Inferenc
 - **Automatisk synkronisering**: Mellan lokal cache och molndatabas
 
 ### AI/ML
-- **Hugging Face Inference API**: Qwen 2.5 72B Instruct modell
+- **Groq API**: Llama 3.3 70B Versatile modell
 - **Intelligent bokning**: Förstår naturligt språk och bokar automatiskt
 - **Kontextmedveten**: Känner till kalenderns aktuella tillstånd
-- **Gratis**: Ingen kostnad via Hugging Face Inference API
+- **Gratis & Snabbt**: Ingen kostnad via Groq API, 10-100x snabbare än traditionella API:er
 
 ### Databas-schema
 ```sql
@@ -128,17 +133,20 @@ events (
   description TEXT,
   created_at TIMESTAMP,
   repeat_pattern TEXT,
-  repeat_until TEXT
+  repeat_until TEXT,
+  reminder BOOLEAN DEFAULT FALSE,
+  reminder_sent BOOLEAN DEFAULT FALSE
 )
 ```
 
 ## AI-funktionalitet
 
-### Hugging Face Inference API (Qwen 2.5 72B Instruct)
-- **Kraftfull språkförståelse**: 72B parametrar för intelligent hantering
+### Groq API (Llama 3.3 70B Versatile)
+- **Kraftfull språkförståelse**: 70B parametrar för intelligent hantering
 - **Svenska språket**: Utmärkt förståelse för svenska instruktioner
 - **Kontextmedveten**: Känner till hela kalenderns tillstånd
-- **Gratis**: Ingen kostnad via Hugging Face Inference API
+- **100% Gratis**: Ingen kostnad via Groq API
+- **Extremt Snabbt**: 10-100x snabbare än Hugging Face och OpenAI
 - **Fungerar överallt**: Desktop, mobil, tablet - ingen lokal GPU krävs
 
 ### Kapabiliteter
@@ -182,6 +190,12 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar (Oktober 2025)
+- ✅ **Telegram-påminnelser fixade (2025-10-19)**
+  - Diagnostiserade och löste problemet med utebliva påminnelser
+  - Supabase-tabellen behövde kolumnen `reminder_sent` (BOOLEAN DEFAULT FALSE)
+  - GitHub Actions secrets behövde konfigureras (SUPABASE_URL, SUPABASE_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID_*)
+  - Telegram-boten verifierad och fungerande - skickar meddelanden perfekt till Albin och Maria
+  - GitHub Actions workflow kör varje 5:e minut och skickar påminnelser 15 min innan händelser
 - ✅ **Supabase molndatabas** - Persistent lagring som överlever Streamlit Cloud restart
   - Händelser försvinner aldrig mer!
   - Automatisk synkronisering mellan lokal cache och molnet

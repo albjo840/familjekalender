@@ -929,17 +929,17 @@ def check_and_send_reminders():
         traceback.print_exc()
 
 def call_gpt_local(user_message, year, month):
-    """Anropar Hugging Face API för AI-assistans"""
+    """Anropar Groq API för AI-assistans (snabb och gratis!)"""
 
     # Hämta API-nyckel från Streamlit secrets
     try:
-        hf_token = st.secrets.get("HUGGINGFACE_API_KEY", "")
+        groq_token = st.secrets.get("GROQ_API_KEY", "")
     except:
-        hf_token = ""
+        groq_token = ""
 
     # Kräver API-nyckel
-    if not hf_token:
-        return "⚠️ Hugging Face API-nyckel saknas. Lägg till HUGGINGFACE_API_KEY i Streamlit secrets."
+    if not groq_token:
+        return "⚠️ Groq API-nyckel saknas. Lägg till GROQ_API_KEY i Streamlit secrets."
 
     # Hämta kalenderkontext
     calendar_context = get_calendar_context(year, month)
@@ -990,40 +990,33 @@ REGLER:
 När du har använt BOOK_EVENT, bekräfta bokningen på ett vänligt sätt!"""
 
     try:
-        # Hugging Face Inference API - använder Qwen 2.5 72B Instruct (kraftfull modell för svensk text)
-        API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
-        headers = {"Authorization": f"Bearer {hf_token}"}
-
-        # Formatera prompt för Qwen 2.5 (använder ChatML format)
-        prompt = f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_message}<|im_end|>\n<|im_start|>assistant\n"
+        # Groq API - använder Llama 3.1 70B (kraftfull modell, gratis och supersnabb!)
+        API_URL = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {groq_token}",
+            "Content-Type": "application/json"
+        }
 
         payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 500,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "return_full_text": False
-            }
+            "model": "llama-3.3-70b-versatile",  # Kraftfull Llama 3.3 modell med utmärkt svenska
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 500,
+            "top_p": 0.9
         }
 
         response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
         if response.status_code != 200:
-            return f"⚠️ Hugging Face API fel (status {response.status_code}). Försök igen om en stund."
+            return f"⚠️ Groq API fel (status {response.status_code}). Försök igen om en stund."
 
         result = response.json()
 
-        # Extrahera svaret
-        if isinstance(result, list) and len(result) > 0:
-            ai_response = result[0].get('generated_text', '').strip()
-        elif isinstance(result, dict):
-            ai_response = result.get('generated_text', '').strip()
-        else:
-            ai_response = str(result)
-
-        # Ta bort Qwen special tokens om de finns
-        ai_response = ai_response.replace('<|im_end|>', '').replace('<|im_start|>', '').strip()
+        # Extrahera svaret från Groq's OpenAI-kompatibla format
+        ai_response = result['choices'][0]['message']['content'].strip()
 
         # Kontrollera om AI:n vill boka en händelse
         if "BOOK_EVENT|" in ai_response:
