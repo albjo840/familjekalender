@@ -19,6 +19,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 import requests
+from zoneinfo import ZoneInfo
 
 def send_telegram_message(bot_token, chat_id, message):
     """Skickar ett Telegram-meddelande"""
@@ -58,14 +59,17 @@ def check_and_send_reminders():
         supabase = create_client(supabase_url, supabase_key)
         print("[SUPABASE] Connected successfully")
 
-        # Hämta dagens datum
-        now = datetime.now()
+        # Hämta nuvarande tid i svensk tidszon (Europe/Stockholm)
+        # GitHub Actions körs på UTC, men våra händelser är i svensk tid
+        stockholm_tz = ZoneInfo("Europe/Stockholm")
+        now = datetime.now(stockholm_tz)
         today = now.strftime('%Y-%m-%d')
 
         # Tidsfönster: 14-16 minuter framåt
         reminder_time_start = now + timedelta(minutes=14)
         reminder_time_end = now + timedelta(minutes=16)
 
+        print(f"[TIME] Current time (Stockholm): {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
         print(f"[TIME] Looking for events between {reminder_time_start.strftime('%H:%M')} and {reminder_time_end.strftime('%H:%M')}")
 
         # Hämta events med påminnelse som inte skickats
@@ -78,7 +82,9 @@ def check_and_send_reminders():
 
         for event in events:
             event_time_str = event['time']
+            # Skapa datetime i svensk tidszon
             event_datetime = datetime.strptime(f"{today} {event_time_str}", '%Y-%m-%d %H:%M')
+            event_datetime = event_datetime.replace(tzinfo=stockholm_tz)
 
             # Kolla om eventet är i påminnelsefönstret
             if reminder_time_start <= event_datetime <= reminder_time_end:
