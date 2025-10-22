@@ -1266,14 +1266,24 @@ def main():
     )
 
     if user_input_top:
-        with st.spinner('🤔 Tänker...'):
-            ai_response = call_gpt_local(user_input_top, st.session_state['current_week'].year, st.session_state['current_week'].month)
+        # Kontrollera om vi redan har processat denna input
+        if 'last_ai_input' not in st.session_state or st.session_state['last_ai_input'] != user_input_top:
+            # Ny input - processa den
+            st.session_state['last_ai_input'] = user_input_top
 
-        if "✓" in ai_response:
-            st.success(ai_response)
-            st.rerun()
-        else:
-            st.info(ai_response)
+            with st.spinner('🤔 Tänker...'):
+                ai_response = call_gpt_local(user_input_top, st.session_state['current_week'].year, st.session_state['current_week'].month)
+
+            if "✓" in ai_response:
+                st.success(ai_response)
+                # Rensa inputfältet genom att ta bort det från session state
+                if 'ai_search_top' in st.session_state:
+                    del st.session_state['ai_search_top']
+                # Rensa också vår tracking
+                del st.session_state['last_ai_input']
+                st.rerun()
+            else:
+                st.info(ai_response)
 
     st.markdown("---")
 
