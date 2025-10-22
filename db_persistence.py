@@ -76,7 +76,8 @@ class DatabasePersistence:
             c.execute("""
                 SELECT id, user, date, time, duration, title, description,
                        created_at, repeat_pattern, repeat_until,
-                       COALESCE(reminder, 0) as reminder
+                       COALESCE(reminder, 0) as reminder,
+                       COALESCE(reminder_sent, 0) as reminder_sent
                 FROM events
                 ORDER BY date, time
             """)
@@ -94,7 +95,8 @@ class DatabasePersistence:
                     'created_at': row[7],
                     'repeat_pattern': row[8],
                     'repeat_until': row[9],
-                    'reminder': row[10]
+                    'reminder': 1 if row[10] else 0,  # Konvertera till 0/1 för Supabase
+                    'reminder_sent': 1 if row[11] else 0  # Konvertera till 0/1 för Supabase
                 })
 
             conn.close()
@@ -153,8 +155,8 @@ class DatabasePersistence:
                 c.execute("""
                     INSERT INTO events
                     (user, date, time, duration, title, description,
-                     repeat_pattern, repeat_until, reminder)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     repeat_pattern, repeat_until, reminder, reminder_sent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     event['user'],
                     event['date'],
@@ -164,7 +166,8 @@ class DatabasePersistence:
                     event['description'],
                     event.get('repeat_pattern'),
                     event.get('repeat_until'),
-                    event.get('reminder', 0)
+                    event.get('reminder', 0),
+                    event.get('reminder_sent', 0)
                 ))
 
             conn.commit()
