@@ -1499,8 +1499,8 @@ def main():
                             dur = int(current_duration) if current_duration else 1
                         except (ValueError, TypeError):
                             dur = 1
-                        # Beräkna sluttid baserat på duration
-                        time_parts = event['time'].split(':')
+                        # Beräkna sluttid baserat på vald starttid (använd edit_time istället för event['time'])
+                        time_parts = edit_time.split(':')
                         start_hour = int(time_parts[0])
                         start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
                         end_total_min = start_hour * 60 + start_min + dur * 60
@@ -1596,10 +1596,12 @@ def main():
                 time_options.append(selected_time)
                 time_options.sort()
             event_time = st.selectbox("Från:", time_options,
-                                     index=time_options.index(selected_time))
+                                     index=time_options.index(selected_time),
+                                     key="event_start_time")
         with col_end:
-            # Beräkna sluttid baserat på starttid (1 timme senare som default)
-            time_parts = st.session_state.selected_time.split(':')
+            # Beräkna sluttid baserat på vald starttid (1 timme senare som default)
+            # Använd den faktiska valda tiden, inte session state
+            time_parts = event_time.split(':')
             start_hour = int(time_parts[0])
             start_min = int(time_parts[1]) if len(time_parts) > 1 else 0
             default_end_total_min = start_hour * 60 + start_min + 60
@@ -1611,7 +1613,8 @@ def main():
                 end_time_options.append(default_end_time)
                 end_time_options.sort()
             event_end_time = st.selectbox("Till:", end_time_options,
-                                         index=end_time_options.index(default_end_time) if default_end_time in end_time_options else 0)
+                                         index=end_time_options.index(default_end_time) if default_end_time in end_time_options else 0,
+                                         key="event_end_time")
 
         event_description = st.text_area("Beskrivning:", placeholder="Extra detaljer (frivilligt)")
 
