@@ -73,10 +73,32 @@ def check_and_send_reminders():
         print(f"[TIME] Looking for events between {reminder_time_start.strftime('%H:%M')} and {reminder_time_end.strftime('%H:%M')}")
 
         # Hämta events med påminnelse som inte skickats
-        response = supabase.table('events').select('*').eq('date', today).eq('reminder', 1).execute()
+        # OBS: Supabase kan ha reminder som både 0/1 (integer) eller True/False (boolean)
+        # Hämta alla events idag och filtrera i Python för maximal kompatibilitet
+        response = supabase.table('events').select('*').eq('date', today).execute()
 
-        events = [e for e in response.data if not e.get('reminder_sent', False)]
-        print(f"[EVENTS] Found {len(events)} events with unsent reminders today")
+        # Filtrera: reminder måste vara aktiverad (1, True, eller "truthy")
+        # OCH reminder_sent måste vara False/0/None
+        events = []
+        for e in response.data:
+            reminder = e.get('reminder')
+            reminder_sent = e.get('reminder_sent')
+
+            # reminder måste vara aktiverad (hantera både 0/1 och True/False)
+            if reminder in (1, True, '1'):
+                # reminder_sent måste vara False/0/None (hantera både 0/1 och True/False)
+                if reminder_sent in (0, False, None, '0'):
+                    events.append(e)
+
+        print(f"[EVENTS] Total events today: {len(response.data)}")
+        print(f"[EVENTS] Events with unsent reminders: {len(events)}")
+
+        if len(response.data) > 0 and len(events) == 0:
+            print(f"[DEBUG] All events today already have reminders sent or reminder disabled")
+            # Visa exempel på första eventet för debugging
+            if response.data:
+                first = response.data[0]
+                print(f"[DEBUG] Example event: reminder={first.get('reminder')}, reminder_sent={first.get('reminder_sent')}")
 
         reminders_sent = 0
 
@@ -114,9 +136,9 @@ God förberedelse! 🙂"""
                 if send_telegram_message(bot_token, chat_id, message):
                     print(f"[SENT] Reminder sent to {user}")
 
-                    # Markera som skickad i Supabase
-                    supabase.table('events').update({'reminder_sent': True}).eq('id', event['id']).execute()
-                    print(f"[UPDATE] Marked event {event['id']} as reminder_sent=true")
+                    # Markera som skickad i Supabase (använd 1 för konsistens)
+                    supabase.table('events').update({'reminder_sent': 1}).eq('id', event['id']).execute()
+                    print(f"[UPDATE] Marked event {event['id']} as reminder_sent=1")
 
                     reminders_sent += 1
                 else:

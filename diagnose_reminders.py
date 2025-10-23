@@ -122,11 +122,13 @@ def main():
         print(f"  🕐 Tid nu: {now.strftime('%H:%M:%S')}")
         print()
 
-        # Hämta alla events idag med reminder=1
-        response = supabase.table('events').select('*').eq('date', today).eq('reminder', 1).execute()
+        # Hämta alla events idag
+        response = supabase.table('events').select('*').eq('date', today).execute()
 
-        all_events_today = response.data
-        print(f"  📊 Totalt {len(all_events_today)} events med reminder=1 idag")
+        # Filtrera events med reminder aktiverad (hantera både 0/1 och True/False)
+        all_events_today = [e for e in response.data if e.get('reminder') in (1, True, '1')]
+        print(f"  📊 Totalt {len(response.data)} events idag")
+        print(f"  📊 {len(all_events_today)} events med reminder aktiverad")
         print()
 
         if not all_events_today:
@@ -141,14 +143,17 @@ def main():
 
         # Visa alla events
         for event in all_events_today:
-            reminder_sent = event.get('reminder_sent', False)
-            status = "✅ Skickad" if reminder_sent else "⏳ Väntar"
+            reminder_sent = event.get('reminder_sent')
+            # Hantera både 0/1 och True/False
+            is_sent = reminder_sent in (1, True, '1')
+            status = "✅ Skickad" if is_sent else "⏳ Väntar"
             print(f"  [{status}] {event['time']} - {event['title']} ({event['user']})")
+            print(f"      reminder={event.get('reminder')}, reminder_sent={reminder_sent}")
 
         print()
 
-        # Filtrera bort redan skickade
-        unsent_events = [e for e in all_events_today if not e.get('reminder_sent', False)]
+        # Filtrera bort redan skickade (hantera både 0/1 och True/False)
+        unsent_events = [e for e in all_events_today if e.get('reminder_sent') in (0, False, None, '0')]
         print(f"  🔔 {len(unsent_events)} påminnelser väntar på att skickas")
         print()
 
