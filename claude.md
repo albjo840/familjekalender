@@ -160,14 +160,22 @@ events (
 
 ```
 familjekalender/
-├── app.py                    # Huvudapplikation
-├── familjekalender.db        # SQLite-databas
-├── requirements.txt          # Python-beroenden
-├── manifest.json            # PWA-konfiguration
+├── app.py                       # Huvudapplikation
+├── familjekalender.db           # SQLite-databas (lokal cache)
+├── db_persistence.py            # Supabase sync-hantering
+├── requirements.txt             # Python-beroenden
+├── manifest.json               # PWA-konfiguration
+├── reminder_service.py         # GitHub Actions påminnelse-service
+├── diagnose_reminders.py       # Diagnostikverktyg för påminnelser
+├── test_reminder_filtering.py  # Testskript för reminder-logik
+├── check_specific_event.py     # Kolla enskilda händelser
 ├── .streamlit/
-│   ├── secrets.toml         # API-nycklar (ej i git)
-│   └── secrets.toml.example # Template för secrets
-├── calendar_component/      # Custom Streamlit-komponent (oanvänd)
+│   ├── secrets.toml            # API-nycklar (ej i git)
+│   └── secrets.toml.example    # Template för secrets
+├── .github/
+│   └── workflows/
+│       └── reminder-service.yml # Cron-jobb för påminnelser
+├── calendar_component/         # Custom Streamlit-komponent (oanvänd)
 │   ├── __init__.py
 │   └── frontend/
 │       └── index.html
@@ -190,6 +198,14 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar (Oktober 2025)
+- ✅ **Telegram-påminnelser typ-mismatch fixat (2025-10-23)**
+  - Fixade kritisk bug där påminnelser inte skickades pga typ-mismatch (0/1 vs True/False)
+  - `reminder_service.py` hanterar nu både integer (0/1) och boolean (True/False) från Supabase
+  - Förbättrad filtrering: hämtar alla händelser och filtrerar i Python för maximal kompatibilitet
+  - Uppdaterad `diagnose_reminders.py` med samma robust logik
+  - Nytt testskript `test_reminder_filtering.py` verifierar korrekt filtrering
+  - Nytt diagnostikskript `check_specific_event.py` för att kolla enskilda händelser
+  - Förbättrad debug-logging för enklare felsökning
 - ✅ **AI duplicerade bokningar fixat (2025-10-20)**
   - Fixade problem där AI:n skapade flera identiska bokningar
   - Detekterar och ignorerar multipla BOOK_EVENT-kommandon i samma svar
@@ -245,6 +261,46 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 - [ ] Dela kalenderlänk med familjemedlemmar
 - [ ] Mörkt tema
 - [ ] Flera påminnelsetider (1 dag, 1 timme, 15 min)
+
+## Felsökning
+
+### Telegram-påminnelser fungerar inte
+
+**Diagnostikverktyg:**
+
+1. **Kolla specifik händelse:**
+   ```bash
+   python check_specific_event.py
+   ```
+   Verifierar om en händelse finns i Supabase och om påminnelse är aktiverad.
+
+2. **Generell diagnostik:**
+   ```bash
+   python diagnose_reminders.py
+   ```
+   Kollar miljövariabler, Supabase-anslutning, och visar alla händelser med påminnelser.
+
+3. **Test filtrering lokalt:**
+   ```bash
+   python test_reminder_filtering.py
+   ```
+   Testar att reminder-filtreringslogiken fungerar korrekt.
+
+**Vanliga problem:**
+
+- ✅ **Påminnelse inte ikryssad**: Glöm inte kryssa i "🔔 Påminnelse 15 min innan" när du skapar händelsen
+- ✅ **Händelse inte i Supabase**: Kontrollera att händelsen synkats till molnet
+- ✅ **GitHub Secrets saknas**: Verifiera att TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID_* är konfigurerade
+- ✅ **Tidsfönstret passerat**: Påminnelser skickas 14-16 min innan händelsen
+- ✅ **GitHub Actions körs inte**: Kolla https://github.com/albjo840/familjekalender/actions
+
+**Debug i GitHub Actions:**
+
+Kolla loggar från senaste körningen:
+1. Gå till repository på GitHub
+2. Klicka på "Actions"
+3. Välj "Reminder Service"
+4. Se output från senaste körningen
 
 ## Licens
 
