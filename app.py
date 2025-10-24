@@ -663,7 +663,7 @@ def get_events_for_week(start_date):
 
         # Hämta både vanliga händelser och återkommande händelser som kan visas denna vecka
         c.execute('''
-            SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until,
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
                    COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
@@ -695,10 +695,10 @@ def get_events_for_week(start_date):
                 while current_date <= min(repeat_end, end_date):
                     # Lägg till om det är rätt veckodag OCH vi är efter händelsens startdatum
                     if current_date >= event_date and current_date.weekday() == target_weekday:
-                        # Format: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until, reminder
+                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until, reminder
                         expanded_events.append((
                             e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
-                            e['duration'], e['title'], e['description'], e['created_at'],
+                            e['title'], e['description'], e['created_at'], e['duration'],
                             e['repeat_pattern'], e['repeat_until'], e.get('reminder', 0)
                         ))
                     current_date += timedelta(days=1)
@@ -728,7 +728,7 @@ def get_events_for_month(year, month):
 
         # Optimerad SQL: Hämta bara relevanta events (inkl. återkommande som kan visas i månaden)
         c.execute('''
-            SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until,
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
                    COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
@@ -759,7 +759,7 @@ def get_events_for_month(year, month):
                     if current_date >= first_day and current_date.weekday() == target_weekday:
                         expanded_events.append((
                             e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
-                            e['duration'], e['title'], e['description'], e['created_at'],
+                            e['title'], e['description'], e['created_at'], e['duration'],
                             e['repeat_pattern'], e['repeat_until'], e.get('reminder', 0)
                         ))
                     current_date += timedelta(days=1)
@@ -1357,16 +1357,21 @@ def main():
     # Skapa DataFrame för enklare hantering
     if events:
         # Kontrollera om duration finns i resultatet
-        if len(events[0]) >= 10:  # Ny struktur med repeat
-            # Korrekt ordning: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+        if len(events[0]) >= 11:  # Ny struktur med repeat och reminder
+            # Korrekt ordning: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until, reminder
+            events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until', 'reminder'])
+        elif len(events[0]) >= 10:  # Struktur med repeat men utan reminder
             events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until'])
+            events_df['reminder'] = 0  # Sätt default reminder
         elif len(events[0]) >= 8:  # Struktur med duration
             events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration'])
+            events_df['reminder'] = 0  # Sätt default reminder
         else:  # Gammal struktur utan duration
             events_df = pd.DataFrame(events, columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at'])
             events_df['duration'] = 1  # Sätt default duration
+            events_df['reminder'] = 0  # Sätt default reminder
     else:
-        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until'])
+        events_df = pd.DataFrame(columns=['id', 'user', 'date', 'time', 'title', 'description', 'created_at', 'duration', 'repeat_pattern', 'repeat_until', 'reminder'])
 
     # Dialog för att lägga till händelse
     if 'show_add_dialog' not in st.session_state:
