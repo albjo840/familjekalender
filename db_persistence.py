@@ -121,14 +121,17 @@ class DatabasePersistence:
                 print("[SUPABASE] No new events to sync (all events already in cloud)")
 
             # Uppdatera befintliga händelser baserat på local_id
+            # OBS: reminder_sent exkluderas - det är cloud-managed av GitHub Actions
             existing_events = [e for e in local_events if e['local_id'] in existing_local_ids]
             if existing_events:
                 for event in existing_events:
+                    # Skapa uppdateringsobjekt utan reminder_sent (cloud-managed kolumn)
+                    update_data = {k: v for k, v in event.items() if k != 'reminder_sent'}
                     self.supabase_client.table('events')\
-                        .update(event)\
+                        .update(update_data)\
                         .eq('local_id', event['local_id'])\
                         .execute()
-                print(f"[SUPABASE] Updated {len(existing_events)} existing events in cloud")
+                print(f"[SUPABASE] Updated {len(existing_events)} existing events in cloud (reminder_sent preserved)")
 
             return True
 
