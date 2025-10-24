@@ -663,7 +663,7 @@ def get_events_for_week(start_date):
 
         # Hämta både vanliga händelser och återkommande händelser som kan visas denna vecka
         c.execute('''
-            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
+            SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until,
                    COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
@@ -695,10 +695,10 @@ def get_events_for_week(start_date):
                 while current_date <= min(repeat_end, end_date):
                     # Lägg till om det är rätt veckodag OCH vi är efter händelsens startdatum
                     if current_date >= event_date and current_date.weekday() == target_weekday:
-                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until, reminder
+                        # Format: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until, reminder
                         expanded_events.append((
                             e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
-                            e['title'], e['description'], e['created_at'], e['duration'],
+                            e['duration'], e['title'], e['description'], e['created_at'],
                             e['repeat_pattern'], e['repeat_until'], e.get('reminder', 0)
                         ))
                     current_date += timedelta(days=1)
@@ -728,7 +728,7 @@ def get_events_for_month(year, month):
 
         # Optimerad SQL: Hämta bara relevanta events (inkl. återkommande som kan visas i månaden)
         c.execute('''
-            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
+            SELECT id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until,
                    COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
