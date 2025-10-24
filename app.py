@@ -413,7 +413,7 @@ st.markdown("""
 # Hjälpfunktion för säker event-unpacking
 def safe_unpack_event(event):
     """Säkert unpacking av event oavsett antal kolumner"""
-    # Standard struktur: id, user, date, time, duration, title, description, created_at, repeat_pattern, repeat_until
+    # Standard struktur: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until, reminder
     defaults = {
         'id': None,
         'user': '',
@@ -424,10 +424,25 @@ def safe_unpack_event(event):
         'description': '',
         'created_at': '',
         'repeat_pattern': None,
-        'repeat_until': None
+        'repeat_until': None,
+        'reminder': 0
     }
 
-    if len(event) >= 10:
+    if len(event) >= 11:
+        return {
+            'id': event[0],
+            'user': event[1],
+            'date': event[2],
+            'time': event[3],
+            'duration': event[4] or 1,
+            'title': event[5],
+            'description': event[6] or '',
+            'created_at': event[7] or '',
+            'repeat_pattern': event[8],
+            'repeat_until': event[9],
+            'reminder': event[10] or 0
+        }
+    elif len(event) >= 10:
         return {
             'id': event[0],
             'user': event[1],
@@ -648,7 +663,8 @@ def get_events_for_week(start_date):
 
         # Hämta både vanliga händelser och återkommande händelser som kan visas denna vecka
         c.execute('''
-            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
+                   COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
                OR (repeat_pattern IS NOT NULL AND date <= ?)
@@ -679,11 +695,11 @@ def get_events_for_week(start_date):
                 while current_date <= min(repeat_end, end_date):
                     # Lägg till om det är rätt veckodag OCH vi är efter händelsens startdatum
                     if current_date >= event_date and current_date.weekday() == target_weekday:
-                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+                        # Format: id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until, reminder
                         expanded_events.append((
                             e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
                             e['title'], e['description'], e['created_at'], e['duration'],
-                            e['repeat_pattern'], e['repeat_until']
+                            e['repeat_pattern'], e['repeat_until'], e.get('reminder', 0)
                         ))
                     current_date += timedelta(days=1)
             else:
@@ -712,7 +728,8 @@ def get_events_for_month(year, month):
 
         # Optimerad SQL: Hämta bara relevanta events (inkl. återkommande som kan visas i månaden)
         c.execute('''
-            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until
+            SELECT id, user, date, time, title, description, created_at, duration, repeat_pattern, repeat_until,
+                   COALESCE(reminder, 0) as reminder
             FROM events
             WHERE (date BETWEEN ? AND ?)
                OR (repeat_pattern IS NOT NULL AND date <= ?)
@@ -743,7 +760,7 @@ def get_events_for_month(year, month):
                         expanded_events.append((
                             e['id'], e['user'], current_date.strftime('%Y-%m-%d'), e['time'],
                             e['duration'], e['title'], e['description'], e['created_at'],
-                            e['repeat_pattern'], e['repeat_until']
+                            e['repeat_pattern'], e['repeat_until'], e.get('reminder', 0)
                         ))
                     current_date += timedelta(days=1)
             else:
