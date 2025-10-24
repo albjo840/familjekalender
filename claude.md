@@ -190,6 +190,29 @@ Familjemedlemmar kan då komma åt på: `http://DIN-IP:8501`
 ## Utveckling
 
 ### Senaste uppdateringar (Oktober 2025)
+- ✅ **Kritiska Supabase & Påminnelse-buggar fixade (2025-10-24)**
+  - **Bug #1: Supabase smart sync** - Förhindrar dataförlust
+    - Destruktiv "full sync" raderade data vid varje uppdatering
+    - Implementerat inkrementell merge: lägger bara till nya händelser
+    - Uppdaterar befintliga utan att radera andra händelser i molnet
+    - Separat hantering av raderingar (sync_deletions_to_supabase)
+  - **Bug #2: Telegram race condition** - reminder_sent skrivskydd
+    - reminder_sent skrevs över från lokal databas vid varje sync
+    - GitHub Actions satte reminder_sent=True → app skrev över till False
+    - Resultat: samma påminnelse skickades om och om igen
+    - Fixat: reminder_sent är nu cloud-managed, exkluderas från uppdateringar
+  - **Bug #3: Påminnelse-kryssruta visade alltid False**
+    - SQL-frågor hämtade inte reminder-kolumnen från databasen
+    - safe_unpack_event() hade inte reminder i strukturen
+    - Kryssrutan visade alltid False vid redigering
+    - Vid sparande: reminder skrevs över till 0 → påminnelser försvann
+    - Fixat: reminder inkluderad i alla SQL-frågor och event-strukturer
+  - **Bug #4: ValueError i kalendervyn**
+    - Kolumnordning matchade inte mellan SQL och safe_unpack_event()
+    - SQL returnerade: title, description, created_at, duration
+    - Python förväntade: duration, title, description, created_at
+    - Fixat: standardiserad kolumnordning i alla SQL-frågor
+  - Commits: 69fa632, b7af884, ff55c2a, 3b19a3a
 - ✅ **AI duplicerade bokningar fixat (2025-10-20)**
   - Fixade problem där AI:n skapade flera identiska bokningar
   - Detekterar och ignorerar multipla BOOK_EVENT-kommandon i samma svar
