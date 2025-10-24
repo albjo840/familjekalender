@@ -64,7 +64,7 @@ class DatabasePersistence:
             self.backup_method = "json"  # Fallback till JSON
 
     def sync_to_supabase(self) -> bool:
-        """Synkar alla händelser från lokal SQLite till Supabase"""
+        """Synkar alla händelser från lokal SQLite till Supabase (SMART MERGE - ingen data raderas)"""
         if not self.supabase_client:
             return False
 
@@ -82,9 +82,9 @@ class DatabasePersistence:
                 ORDER BY date, time
             """)
 
-            events = []
+            local_events = []
             for row in c.fetchall():
-                events.append({
+                local_events.append({
                     'local_id': row[0],
                     'user': row[1],
                     'date': row[2],
@@ -95,24 +95,41 @@ class DatabasePersistence:
                     'created_at': row[7],
                     'repeat_pattern': row[8],
                     'repeat_until': row[9],
-                    'reminder': 1 if row[10] else 0,  # Konvertera till 0/1 för Supabase
-                    'reminder_sent': 1 if row[11] else 0  # Konvertera till 0/1 för Supabase
+                    'reminder': 1 if row[10] else 0,
+                    'reminder_sent': 1 if row[11] else 0
                 })
 
             conn.close()
 
-            if not events:
-                print("[SUPABASE] No events to sync")
+            if not local_events:
+                print("[SUPABASE] No local events to sync")
                 return True
 
-            # Rensa befintliga händelser i Supabase (full sync)
-            self.supabase_client.table('events').delete().neq('id', 0).execute()
+            # Hämta befintliga händelser från Supabase
+            response = self.supabase_client.table('events').select('local_id').execute()
+            existing_local_ids = {event['local_id'] for event in response.data if 'local_id' in event}
 
-            # Lägg till alla händelser
-            for event in events:
-                self.supabase_client.table('events').insert(event).execute()
+            # Synka endast nya händelser (de som inte finns i Supabase)
+            new_events = [e for e in local_events if e['local_id'] not in existing_local_ids]
 
-            print(f"[SUPABASE] Successfully synced {len(events)} events to cloud")
+            if new_events:
+                # Lägg till nya händelser en och en
+                for event in new_events:
+                    self.supabase_client.table('events').insert(event).execute()
+                print(f"[SUPABASE] Added {len(new_events)} new events to cloud")
+            else:
+                print("[SUPABASE] No new events to sync (all events already in cloud)")
+
+            # Uppdatera befintliga händelser baserat på local_id
+            existing_events = [e for e in local_events if e['local_id'] in existing_local_ids]
+            if existing_events:
+                for event in existing_events:
+                    self.supabase_client.table('events')\
+                        .update(event)\
+                        .eq('local_id', event['local_id'])\
+                        .execute()
+                print(f"[SUPABASE] Updated {len(existing_events)} existing events in cloud")
+
             return True
 
         except Exception as e:
@@ -322,11 +339,58 @@ class DatabasePersistence:
         except Exception as e:
             print(f"[CHECK ERROR] {e}")
 
+    def delete_from_supabase_by_local_id(self, local_id: int) -> bool:
+        """Raderar en händelse från Supabase baserat på local_id"""
+        if not self.supabase_client:
+            return False
+
+        try:
+            self.supabase_client.table('events').delete().eq('local_id', local_id).execute()
+            print(f"[SUPABASE] Deleted event with local_id={local_id} from cloud")
+            return True
+        except Exception as e:
+            print(f"[SUPABASE DELETE ERROR] {e}")
+            return False
+
+    def sync_deletions_to_supabase(self) -> bool:
+        """Synkar raderingar från lokal databas till Supabase"""
+        if not self.supabase_client:
+            return False
+
+        try:
+            # Hämta alla local_id från lokal databas
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute("SELECT id FROM events")
+            local_ids = {row[0] for row in c.fetchall()}
+            conn.close()
+
+            # Hämta alla local_id från Supabase
+            response = self.supabase_client.table('events').select('local_id').execute()
+            cloud_local_ids = {event['local_id'] for event in response.data if 'local_id' in event}
+
+            # Hitta händelser som finns i molnet men inte lokalt (har raderats)
+            deleted_ids = cloud_local_ids - local_ids
+
+            if deleted_ids:
+                for local_id in deleted_ids:
+                    self.supabase_client.table('events').delete().eq('local_id', local_id).execute()
+                print(f"[SUPABASE] Removed {len(deleted_ids)} deleted events from cloud")
+                return True
+            else:
+                print("[SUPABASE] No deletions to sync")
+                return True
+
+        except Exception as e:
+            print(f"[SUPABASE SYNC DELETIONS ERROR] {e}")
+            return False
+
     def auto_backup_on_change(self) -> None:
         """Körs automatiskt efter varje ändring"""
         if self.backup_method == "supabase":
             # Synka till både Supabase och JSON (JSON som extra backup)
             self.sync_to_supabase()
+            self.sync_deletions_to_supabase()
             self.backup_to_json()
         elif self.backup_method == "json":
             self.backup_to_json()
