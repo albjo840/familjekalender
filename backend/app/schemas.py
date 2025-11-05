@@ -27,6 +27,9 @@ class EventBase(BaseModel):
     user_id: int
     reminder_enabled: bool = False
     reminder_minutes: int = 30
+    recurrence_type: str = "none"  # none, daily, weekly, monthly
+    recurrence_interval: int = 1  # Varje X dag/vecka/månad
+    recurrence_end_date: Optional[datetime] = None  # När upprepningen slutar
 
 class EventCreate(EventBase):
     pass
@@ -40,6 +43,9 @@ class EventUpdate(BaseModel):
     user_id: Optional[int] = None
     reminder_enabled: Optional[bool] = None
     reminder_minutes: Optional[int] = None
+    recurrence_type: Optional[str] = None
+    recurrence_interval: Optional[int] = None
+    recurrence_end_date: Optional[datetime] = None
 
 class Event(EventBase):
     id: int

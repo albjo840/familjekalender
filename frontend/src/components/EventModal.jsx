@@ -11,6 +11,9 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
     all_day: false,
     reminder_enabled: false,
     reminder_minutes: 30,
+    recurrence_type: 'none',
+    recurrence_interval: 1,
+    recurrence_end_date: '',
   })
 
   useEffect(() => {
@@ -25,6 +28,9 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
         all_day: event.resource.all_day,
         reminder_enabled: event.resource.reminder_enabled,
         reminder_minutes: event.resource.reminder_minutes,
+        recurrence_type: event.resource.recurrence_type || 'none',
+        recurrence_interval: event.resource.recurrence_interval || 1,
+        recurrence_end_date: event.resource.recurrence_end_date ? formatDateLocal(event.resource.recurrence_end_date) : '',
       })
     } else if (slot) {
       // Ny händelse från valt tidsintervall
@@ -46,6 +52,15 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
     return stockholmTime.toISOString().slice(0, 16)
   }
 
+  const formatDateLocal = (date) => {
+    // Konvertera datum (utan tid) för date input
+    const d = new Date(date)
+    const stockholmTime = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Stockholm' }))
+    const offset = stockholmTime.getTimezoneOffset()
+    stockholmTime.setMinutes(stockholmTime.getMinutes() - offset)
+    return stockholmTime.toISOString().slice(0, 10)
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
 
@@ -54,6 +69,7 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
       ...formData,
       start_time: new Date(formData.start_time).toISOString(),
       end_time: new Date(formData.end_time).toISOString(),
+      recurrence_end_date: formData.recurrence_end_date ? new Date(formData.recurrence_end_date + 'T23:59:59').toISOString() : null,
     }
 
     onSave(eventData)
@@ -189,6 +205,51 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
                 <option value="1440">1 dag</option>
               </select>
             </div>
+          )}
+
+          <div className="form-group">
+            <label htmlFor="recurrence_type">Upprepa</label>
+            <select
+              id="recurrence_type"
+              name="recurrence_type"
+              value={formData.recurrence_type}
+              onChange={handleChange}
+            >
+              <option value="none">Ingen upprepning</option>
+              <option value="daily">Dagligen</option>
+              <option value="weekly">Veckovis</option>
+              <option value="monthly">Månadsvis</option>
+            </select>
+          </div>
+
+          {formData.recurrence_type !== 'none' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="recurrence_interval">
+                  Upprepa var {formData.recurrence_type === 'daily' ? 'dag' : formData.recurrence_type === 'weekly' ? 'vecka' : 'månad'}
+                </label>
+                <input
+                  type="number"
+                  id="recurrence_interval"
+                  name="recurrence_interval"
+                  value={formData.recurrence_interval}
+                  onChange={handleChange}
+                  min="1"
+                  max="365"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="recurrence_end_date">Upprepa till (valfritt)</label>
+                <input
+                  type="date"
+                  id="recurrence_end_date"
+                  name="recurrence_end_date"
+                  value={formData.recurrence_end_date}
+                  onChange={handleChange}
+                />
+              </div>
+            </>
           )}
 
           <div className="modal-actions">

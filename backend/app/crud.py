@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from . import models, schemas
-from datetime import datetime
-from typing import Optional
+from .recurrence import generate_recurrence_instances
+from datetime import datetime, timedelta
+from typing import Optional, List
 
 # User CRUD operations
 def get_user(db: Session, user_id: int):
@@ -24,15 +25,38 @@ def create_user(db: Session, user: schemas.UserCreate):
 def get_event(db: Session, event_id: int):
     return db.query(models.Event).filter(models.Event.id == event_id).first()
 
-def get_events(db: Session, skip: int = 0, limit: int = 100, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None):
-    query = db.query(models.Event)
+def get_events(db: Session, skip: int = 0, limit: int = 1000, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None):
+    """
+    Hämta events inklusive återkommande instanser
+    """
+    # Om inget datumintervall är angivet, använd de senaste 3 månaderna till 6 månader framåt
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=90)
+    if not end_date:
+        end_date = datetime.utcnow() + timedelta(days=180)
 
-    if start_date:
-        query = query.filter(models.Event.start_time >= start_date)
-    if end_date:
-        query = query.filter(models.Event.end_time <= end_date)
+    # Hämta alla events som potentiellt kan visa sig i intervallet
+    # Inkludera recurring events som startade innan end_date
+    query = db.query(models.Event).filter(
+        models.Event.start_time <= end_date
+    )
 
-    return query.offset(skip).limit(limit).all()
+    all_events = query.all()
+
+    # Samla alla event-instanser (original + recurring)
+    result_events = []
+
+    for event in all_events:
+        # Lägg till original händelsen om den är inom intervallet
+        if event.start_time >= start_date and event.start_time <= end_date:
+            result_events.append(event)
+
+        # Om händelsen är återkommande, generera instanser
+        if event.recurrence_type != "none":
+            recurring_instances = generate_recurrence_instances(event, start_date, end_date)
+            result_events.extend(recurring_instances)
+
+    return result_events
 
 def get_events_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     return db.query(models.Event).filter(models.Event.user_id == user_id).offset(skip).limit(limit).all()

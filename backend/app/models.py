@@ -25,6 +25,12 @@ class Event(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     reminder_enabled = Column(Boolean, default=False)
     reminder_minutes = Column(Integer, default=30)  # Påminnelse X minuter innan
+
+    # Återkommande händelser
+    recurrence_type = Column(String, default="none")  # none, daily, weekly, monthly
+    recurrence_interval = Column(Integer, default=1)  # Varje X dag/vecka/månad
+    recurrence_end_date = Column(DateTime, nullable=True)  # När upprepningen slutar (null = oändlig)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
