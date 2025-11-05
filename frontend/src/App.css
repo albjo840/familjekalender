@@ -59,3 +59,94 @@
   padding: 20px 40px;
   overflow: hidden;
 }
+
+/* Mobilanpassning */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+  }
+
+  .user-legend {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .user-badge {
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+
+  .user-color {
+    width: 14px;
+    height: 14px;
+  }
+
+  .user-name {
+    font-size: 12px;
+  }
+
+  .calendar-container {
+    padding: 12px;
+    overflow: auto;
+  }
+
+  /* Optimera kalendervy för mobil */
+  .rbc-calendar {
+    font-size: 12px;
+  }
+
+  .rbc-header {
+    padding: 8px 2px;
+    font-size: 11px;
+  }
+
+  .rbc-date-cell {
+    padding: 4px;
+  }
+
+  .rbc-event {
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  .rbc-toolbar {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .rbc-toolbar-label {
+    font-size: 16px;
+    order: -1;
+  }
+
+  .rbc-btn-group {
+    font-size: 12px;
+  }
+
+  .rbc-btn-group button {
+    padding: 6px 12px;
+  }
+
+  /* Anpassa tid-kolumnen för dag/vecka-vy */
+  .rbc-time-slot {
+    min-height: 40px;
+  }
+
+  .rbc-timeslot-group {
+    min-height: 80px;
+  }
+
+  .rbc-time-gutter {
+    font-size: 11px;
+  }
+}

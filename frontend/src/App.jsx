@@ -38,6 +38,16 @@ function App() {
   const [showModal, setShowModal] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+
+  // Detektera mobilskärm
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Hämta användare
   useEffect(() => {
@@ -159,7 +169,7 @@ function App() {
           onSelectEvent={handleSelectEvent}
           eventPropGetter={eventStyleGetter}
           views={['month', 'week', 'day']}
-          defaultView="month"
+          defaultView={isMobile ? 'week' : 'month'}
           culture="sv"
           formats={formats}
           messages={{
