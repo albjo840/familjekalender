@@ -8,8 +8,8 @@ from datetime import datetime
 from . import models, schemas, crud, notifications
 from .database import engine, get_db
 
-# Skapa databas-tabeller
-models.Base.metadata.create_all(bind=engine)
+# Databas-tabeller skapas via init_users.py
+# models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Familjekalender API")
 
