@@ -1,0 +1,112 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f5f5f5;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* React Big Calendar styling */
+.rbc-calendar {
+  height: 100%;
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 12px 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #3c4043;
+  border-bottom: 1px solid #dadce0;
+  background: #fff;
+}
+
+.rbc-today {
+  background-color: #e8f0fe;
+}
+
+.rbc-event {
+  border-radius: 4px;
+  border: none;
+  padding: 2px 5px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rbc-event:hover {
+  opacity: 0.8;
+}
+
+.rbc-event.rbc-selected {
+  background-color: inherit;
+  outline: 2px solid #1a73e8;
+}
+
+.rbc-month-view {
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.rbc-day-bg {
+  border-left: 1px solid #dadce0;
+}
+
+.rbc-month-row {
+  border-top: 1px solid #dadce0;
+}
+
+.rbc-off-range-bg {
+  background: #f8f9fa;
+}
+
+.rbc-toolbar {
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid #dadce0;
+}
+
+.rbc-toolbar button {
+  padding: 8px 16px;
+  border: 1px solid #dadce0;
+  background: white;
+  color: #3c4043;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background: #f8f9fa;
+  border-color: #3c4043;
+}
+
+.rbc-toolbar button.rbc-active {
+  background: #1a73e8;
+  color: white;
+  border-color: #1a73e8;
+}
+
+.rbc-toolbar-label {
+  font-size: 22px;
+  font-weight: 400;
+  color: #3c4043;
+}
