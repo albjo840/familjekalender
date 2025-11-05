@@ -37,14 +37,19 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
   }, [event, slot])
 
   const formatDateTimeLocal = (date) => {
+    // Konvertera från UTC till svensk tid för visning
     const d = new Date(date)
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-    return d.toISOString().slice(0, 16)
+    // Lägg till svensk tidszon offset (UTC+1 eller UTC+2 beroende på sommartid)
+    const stockholmTime = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Stockholm' }))
+    const offset = stockholmTime.getTimezoneOffset()
+    stockholmTime.setMinutes(stockholmTime.getMinutes() - offset)
+    return stockholmTime.toISOString().slice(0, 16)
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
 
+    // Konvertera från lokal tid (användarens input) till UTC för backend
     const eventData = {
       ...formData,
       start_time: new Date(formData.start_time).toISOString(),
@@ -108,7 +113,7 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="start_time">Starttid *</label>
+              <label htmlFor="start_time">Starttid * <span style={{fontSize: '12px', fontWeight: 'normal', color: '#5f6368'}}>(Svensk tid)</span></label>
               <input
                 type="datetime-local"
                 id="start_time"
@@ -120,7 +125,7 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
             </div>
 
             <div className="form-group">
-              <label htmlFor="end_time">Sluttid *</label>
+              <label htmlFor="end_time">Sluttid * <span style={{fontSize: '12px', fontWeight: 'normal', color: '#5f6368'}}>(Svensk tid)</span></label>
               <input
                 type="datetime-local"
                 id="end_time"
