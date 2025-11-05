@@ -19,6 +19,17 @@ const localizer = dateFnsLocalizer({
   locales,
 })
 
+// 24-timmars format för svensk tid
+const formats = {
+  timeGutterFormat: 'HH:mm',
+  eventTimeRangeFormat: ({ start, end }, culture, localizer) =>
+    localizer.format(start, 'HH:mm', culture) + ' - ' + localizer.format(end, 'HH:mm', culture),
+  agendaTimeRangeFormat: ({ start, end }, culture, localizer) =>
+    localizer.format(start, 'HH:mm', culture) + ' - ' + localizer.format(end, 'HH:mm', culture),
+  selectRangeFormat: ({ start, end }, culture, localizer) =>
+    localizer.format(start, 'HH:mm', culture) + ' - ' + localizer.format(end, 'HH:mm', culture),
+}
+
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 function App() {
@@ -150,6 +161,7 @@ function App() {
           views={['month', 'week', 'day']}
           defaultView="month"
           culture="sv"
+          formats={formats}
           messages={{
             next: "Nästa",
             previous: "Föregående",
