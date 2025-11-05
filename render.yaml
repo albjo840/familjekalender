@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: familjekalender-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: NTFY_TOPIC
+        value: familjekalender-albin
+      - key: NTFY_URL
+        value: https://ntfy.sh
