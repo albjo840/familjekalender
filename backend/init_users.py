@@ -2,10 +2,19 @@
 Script för att initiera användare med färger
 Kör detta en gång efter deployment för att skapa alla användare
 """
-from app.database import SessionLocal
-from app import models, crud, schemas
+from dotenv import load_dotenv
+load_dotenv()  # Ladda .env-filen
+
+from app import models  # Importera models först så de registreras
+from app.database import SessionLocal, engine, Base
+from app import crud, schemas
 
 def init_users():
+    # Skapa alla tabeller först
+    print("Skapar databas-tabeller...")
+    models.Base.metadata.create_all(bind=engine)
+    print("Tabeller skapade!")
+
     db = SessionLocal()
 
     # Definiera användare med Google Calendar-liknande färger
