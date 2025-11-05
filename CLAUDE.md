@@ -5,7 +5,14 @@
 En modern familjekalender-applikation byggd med FastAPI (backend), React (frontend), PostgreSQL (Supabase), och deployad på Render.com + Vercel/Netlify.
 
 **Skapad:** 2025-11-05
-**Status:** Backend deployad och funktionell, Frontend deployment pågår
+**Status:** ✅ Komplett och live!
+
+## 🌐 Live URLs
+
+- **Frontend:** https://familjekalender.vercel.app
+- **Backend API:** https://familjekalender.onrender.com
+- **API Docs:** https://familjekalender.onrender.com/docs
+- **Notifikationer:** https://ntfy.sh/familjekalender
 
 ---
 
@@ -27,8 +34,8 @@ En modern familjekalender-applikation byggd med FastAPI (backend), React (fronte
 
 ### Notifikationer
 - **Service:** ntfy.sh (gratis)
-- **Topic:** `familjekalender-albin`
-- **URL:** https://ntfy.sh/familjekalender-albin
+- **Topic:** `familjekalender`
+- **URL:** https://ntfy.sh/familjekalender
 
 ---
 
@@ -137,7 +144,7 @@ CREATE TABLE events (
 ### Backend (.env)
 ```bash
 DATABASE_URL=postgresql://postgres.xbhqtqjriiytkcnprteb:Sexfyra6@aws-1-eu-north-1.pooler.supabase.com:5432/postgres
-NTFY_TOPIC=familjekalender-albin
+NTFY_TOPIC=familjekalender
 NTFY_URL=https://ntfy.sh
 ```
 
@@ -145,6 +152,8 @@ NTFY_URL=https://ntfy.sh
 ```bash
 VITE_API_URL=https://familjekalender.onrender.com/api
 ```
+
+**OBS:** I produktion används environment variables från Vercel/Render dashboards, inte .env filer.
 
 ### Render.com Environment Variables
 Samma som backend .env ovan.
@@ -171,15 +180,17 @@ Samma som backend .env ovan.
 python backend/init_users.py
 ```
 
-### Frontend (Vercel/Netlify)
+### Frontend (Vercel)
 
-**Status:** ⏳ Pågår
+**Status:** ✅ Live på https://familjekalender.vercel.app
 
 **Deployment steg:**
-1. `cd frontend && npm install`
-2. `npm run build`
-3. Deploy `dist/` mapp till Vercel/Netlify
-4. Sätt VITE_API_URL environment variable
+1. GitHub repo kopplad till Vercel
+2. Root directory satt till `frontend`
+3. Auto-deploy vid push till main branch
+4. Environment variable: `VITE_API_URL=https://familjekalender.onrender.com/api`
+5. Build command: `npm run build`
+6. Output directory: `dist`
 
 ---
 
@@ -223,17 +234,17 @@ npm run dev
 
 ### Setup på Mobil
 1. Installera ntfy app från App Store/Google Play
-2. Lägg till subscription: `familjekalender-albin`
+2. Lägg till subscription: `familjekalender`
 3. Aktivera notifikationer
 
 ### Setup på Desktop
-1. Öppna https://ntfy.sh/familjekalender-albin
+1. Öppna https://ntfy.sh/familjekalender
 2. Klicka på klockan → "Enable notifications"
 
 ### Test Notifikation
 ```bash
-curl -d "Test notifikation från familjekalender!" \
-  https://ntfy.sh/familjekalender-albin
+curl -d "Test notifikation från familjekalender! 🎉" \
+  https://ntfy.sh/familjekalender
 ```
 
 ---
@@ -287,13 +298,14 @@ curl -d "Test notifikation från familjekalender!" \
 
 ## Nästa Steg
 
-### Kortsiktigt (Session pågår)
-- [ ] Installera frontend dependencies
-- [ ] Konfigurera frontend för produktion
-- [ ] Testa frontend lokalt
-- [ ] Deploya frontend till Vercel/Netlify
-- [ ] Konfigurera ntfy.sh på mobil
-- [ ] Test end-to-end
+### Session Resultat (2025-11-05) ✅
+- [x] Installera frontend dependencies
+- [x] Konfigurera frontend för produktion
+- [x] Testa frontend lokalt
+- [x] Deploya frontend till Vercel
+- [x] Konfigurera ntfy.sh på mobil
+- [x] Test end-to-end
+- [x] Fixa svensk tidszon (Stockholm UTC+1)
 
 ### Långsiktigt (Framtida förbättringar)
 - [ ] Återkommande händelser (daglig, veckovis, månadsvis)
@@ -347,13 +359,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 ### Vad vi gjort
 1. ✅ Skapade helt ny familjekalender från scratch
 2. ✅ Byggde FastAPI backend med PostgreSQL
-3. ✅ Deployade till Render.com (gratis)
+3. ✅ Deployade backend till Render.com (gratis)
 4. ✅ Konfigurerade Supabase databas
 5. ✅ Skapade React frontend med modern UI
-6. ✅ Integrerade ntfy.sh för notifikationer
-7. ✅ Testade och verifierade alla API endpoints
-8. ✅ Fixade databas-struktur problem
-9. ⏳ Deployment av frontend pågår
+6. ✅ Deployade frontend till Vercel (gratis)
+7. ✅ Integrerade ntfy.sh för notifikationer
+8. ✅ Testade och verifierade alla API endpoints
+9. ✅ Fixade databas-struktur problem
+10. ✅ Konfigurerade svensk tidszon (Stockholm UTC+1)
+11. ✅ Komplett end-to-end test - allt fungerar!
 
 ### Lärdomar
 - Railway.app har inte längre gratis tier → Bytte till Render.com

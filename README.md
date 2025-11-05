@@ -1,6 +1,12 @@
 # Familjekalender
 
-En modern familjekalender byggd med FastAPI, React och PostgreSQL. Designad för att vara gratis att köra på Railway.app med ntfy.sh för push-notifikationer.
+En modern familjekalender byggd med FastAPI, React och PostgreSQL. Gratis hosting på Render.com + Vercel med ntfy.sh för push-notifikationer.
+
+## 🌐 Live Applikation
+
+- **Frontend:** https://familjekalender.vercel.app
+- **Backend API:** https://familjekalender.onrender.com
+- **Notifikationer:** https://ntfy.sh/familjekalender
 
 ## Funktioner
 
