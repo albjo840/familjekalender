@@ -1,51 +1,51 @@
 """
-Migration script to add recurrence columns to events table
+Migration script för att lägga till recurrence-kolumner till events-tabellen
+Körs en gång för att uppdatera databas-schemat
 """
-import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
-from app.database import DATABASE_URL
-
 load_dotenv()
 
+from sqlalchemy import text
+from app.database import engine
+
 def migrate():
-    engine = create_engine(DATABASE_URL)
+    print("Startar migration för att lägga till recurrence-kolumner...")
 
     with engine.connect() as conn:
-        print("Adding recurrence columns to events table...")
-
-        # Add recurrence_type column
+        # Lägg till recurrence_type kolumn
         try:
             conn.execute(text("""
                 ALTER TABLE events
                 ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR DEFAULT 'none'
             """))
-            print("✓ Added recurrence_type column")
+            conn.commit()
+            print("✓ Lade till recurrence_type kolumn")
         except Exception as e:
-            print(f"Note: recurrence_type column might already exist: {e}")
+            print(f"recurrence_type: {e}")
 
-        # Add recurrence_interval column
+        # Lägg till recurrence_interval kolumn
         try:
             conn.execute(text("""
                 ALTER TABLE events
                 ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER DEFAULT 1
             """))
-            print("✓ Added recurrence_interval column")
+            conn.commit()
+            print("✓ Lade till recurrence_interval kolumn")
         except Exception as e:
-            print(f"Note: recurrence_interval column might already exist: {e}")
+            print(f"recurrence_interval: {e}")
 
-        # Add recurrence_end_date column
+        # Lägg till recurrence_end_date kolumn
         try:
             conn.execute(text("""
                 ALTER TABLE events
                 ADD COLUMN IF NOT EXISTS recurrence_end_date TIMESTAMP
             """))
-            print("✓ Added recurrence_end_date column")
+            conn.commit()
+            print("✓ Lade till recurrence_end_date kolumn")
         except Exception as e:
-            print(f"Note: recurrence_end_date column might already exist: {e}")
+            print(f"recurrence_end_date: {e}")
 
-        conn.commit()
-        print("\n✓ Migration completed successfully!")
+    print("\nMigration klar! Databas-schemat är uppdaterat.")
 
 if __name__ == "__main__":
     migrate()

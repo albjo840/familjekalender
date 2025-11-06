@@ -43,7 +43,7 @@ def generate_recurrence_instances(event: models.Event, start_date: datetime, end
             if current_start >= start_date:
                 current_end = current_start + duration
                 instances.append({
-                    "id": f"{event.id}_r_{instance_count}",  # Unikt ID för recurring instance
+                    "id": event.id * 1000000 + instance_count,  # Unikt integer ID för recurring instance
                     "title": event.title,
                     "description": event.description,
                     "start_time": current_start.isoformat(),
