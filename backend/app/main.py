@@ -113,6 +113,48 @@ async def receive_webhook(data: dict):
 def health_check():
     return {"status": "healthy"}
 
+# Migration endpoint (körs en gång för att uppdatera databas-schema)
+@app.post("/admin/migrate")
+def run_migration(db: Session = Depends(get_db)):
+    """
+    Kör databas-migration för att lägga till recurrence-kolumner
+    Säkert att köra flera gånger (IF NOT EXISTS)
+    """
+    from sqlalchemy import text
+    results = []
+
+    try:
+        db.execute(text("""
+            ALTER TABLE events
+            ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR DEFAULT 'none'
+        """))
+        db.commit()
+        results.append("✓ recurrence_type")
+    except Exception as e:
+        results.append(f"recurrence_type: {str(e)}")
+
+    try:
+        db.execute(text("""
+            ALTER TABLE events
+            ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER DEFAULT 1
+        """))
+        db.commit()
+        results.append("✓ recurrence_interval")
+    except Exception as e:
+        results.append(f"recurrence_interval: {str(e)}")
+
+    try:
+        db.execute(text("""
+            ALTER TABLE events
+            ADD COLUMN IF NOT EXISTS recurrence_end_date TIMESTAMP
+        """))
+        db.commit()
+        results.append("✓ recurrence_end_date")
+    except Exception as e:
+        results.append(f"recurrence_end_date: {str(e)}")
+
+    return {"status": "migration completed", "results": results}
+
 # Root endpoint
 @app.get("/")
 def read_root():
