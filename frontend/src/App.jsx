@@ -146,15 +146,19 @@ function App() {
       <header className="app-header">
         <h1>Familjekalender</h1>
         <div className="user-legend">
-          {users.map(user => (
-            <div key={user.id} className="user-badge">
-              <span
-                className="user-color"
-                style={{ backgroundColor: user.color }}
-              ></span>
-              <span className="user-name">{user.name}</span>
-            </div>
-          ))}
+          {users && users.length > 0 ? (
+            users.map(user => (
+              <div key={user.id} className="user-badge">
+                <span
+                  className="user-color"
+                  style={{ backgroundColor: user.color }}
+                ></span>
+                <span className="user-name">{user.name}</span>
+              </div>
+            ))
+          ) : (
+            <div style={{ fontSize: '12px', color: '#666' }}>Laddar användare...</div>
+          )}
         </div>
       </header>
 
