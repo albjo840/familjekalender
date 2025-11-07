@@ -1,4 +1,5 @@
 /* AI Chat Banner - Sticky footer med chat-interface */
+/* Version: 1.1.0 - Improved voice transcription error handling */
 
 .ai-chat-banner {
   position: fixed;
