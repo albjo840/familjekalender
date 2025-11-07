@@ -96,16 +96,42 @@ def transcribe_audio(audio_file_path: str) -> str:
         Transkriberad text
     """
     try:
+        # Kontrollera att filen existerar och har innehåll
+        if not os.path.exists(audio_file_path):
+            raise Exception("Ljudfilen hittades inte")
+
+        file_size = os.path.getsize(audio_file_path)
+        if file_size == 0:
+            raise Exception("Ljudfilen är tom")
+
+        print(f"Transcribing audio file: {audio_file_path} ({file_size} bytes)")
+
         with open(audio_file_path, "rb") as audio_file:
+            # Groq Whisper API call
             transcription = client.audio.transcriptions.create(
-                file=audio_file,
+                file=(os.path.basename(audio_file_path), audio_file.read(), "audio/webm"),
                 model="whisper-large-v3-turbo",
                 language="sv",  # Svenska
-                response_format="text"
+                response_format="text",
+                temperature=0.0  # Mer deterministisk transkribering
             )
+
+        print(f"Transcription result: {transcription[:100] if len(transcription) > 100 else transcription}")
         return transcription
+
     except Exception as e:
-        raise Exception(f"Whisper transkribering misslyckades: {str(e)}")
+        error_msg = str(e)
+        print(f"Whisper transcription error: {error_msg}")
+
+        # Ge mer specifika felmeddelanden
+        if "API key" in error_msg:
+            raise Exception("Groq API-nyckel saknas eller är ogiltig")
+        elif "rate limit" in error_msg.lower():
+            raise Exception("För många requests till Groq API. Vänta en stund och försök igen.")
+        elif "file" in error_msg.lower() or "format" in error_msg.lower():
+            raise Exception("Ljudfilens format stöds inte. Försök med ett annat format.")
+        else:
+            raise Exception(f"Whisper transkribering misslyckades: {error_msg}")
 
 
 # Verktyg som AI:n kan använda

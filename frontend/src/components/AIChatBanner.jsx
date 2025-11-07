@@ -58,9 +58,19 @@ function AIChatBanner({ onEventCreated }) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      })
+
+      // Prova olika format beroende på vad som stöds
+      let mimeType = 'audio/webm'
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4'
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg'
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      console.log('Recording with mimeType:', mimeType)
 
       audioChunksRef.current = []
 
@@ -71,8 +81,9 @@ function AIChatBanner({ onEventCreated }) {
       }
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        await transcribeAudio(audioBlob)
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        console.log('Audio blob created:', audioBlob.size, 'bytes', audioBlob.type)
+        await transcribeAudio(audioBlob, mimeType)
 
         // Stäng av mikrofonen
         stream.getTracks().forEach(track => track.stop())
@@ -96,35 +107,49 @@ function AIChatBanner({ onEventCreated }) {
   }
 
   // Transkribera ljud med Groq Whisper
-  const transcribeAudio = async (audioBlob) => {
+  const transcribeAudio = async (audioBlob, mimeType) => {
     setIsTranscribing(true)
 
     try {
       const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
+
+      // Bestäm filnamn baserat på MIME type
+      let filename = 'recording.webm'
+      if (mimeType.includes('mp4')) {
+        filename = 'recording.mp4'
+      } else if (mimeType.includes('ogg')) {
+        filename = 'recording.ogg'
+      }
+
+      formData.append('audio', audioBlob, filename)
+      console.log('Sending audio for transcription:', filename, audioBlob.size, 'bytes')
 
       const response = await axios.post(`${API_URL}/ai/transcribe`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
-        }
+        },
+        timeout: 30000 // 30 sekunder timeout
       })
+
+      console.log('Transcription response:', response.data)
 
       if (response.data.success && response.data.text) {
         const transcribedText = response.data.text.trim()
+        console.log('Transcribed text:', transcribedText)
         setMessage(transcribedText)
 
         // Auto-submit om det finns text
         if (transcribedText) {
-          // Simulera form submit med transkriberad text
           await submitMessage(transcribedText)
         }
       } else {
-        console.error('Transkribering misslyckades:', response.data.error)
-        alert('Kunde inte transkribera ljudet. Försök igen.')
+        console.error('Transkribering misslyckades:', response.data)
+        alert(`Kunde inte transkribera ljudet. Fel: ${response.data.error || 'Okänt fel'}`)
       }
     } catch (error) {
       console.error('Fel vid transkribering:', error)
-      alert('Ett fel uppstod vid transkribering. Försök igen.')
+      const errorMsg = error.response?.data?.error || error.message || 'Okänt fel'
+      alert(`Ett fel uppstod vid transkribering: ${errorMsg}`)
     } finally {
       setIsTranscribing(false)
     }

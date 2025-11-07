@@ -163,34 +163,71 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     """
     Transkribera ljud till text med Groq Whisper API
 
-    Stödjer format: mp3, mp4, mpeg, mpga, m4a, wav, webm
+    Stödjer format: mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg
     """
+    tmp_path = None
     try:
+        # Validera filstorlek (max 25MB)
+        content = await audio.read()
+        file_size_mb = len(content) / (1024 * 1024)
+
+        if file_size_mb > 25:
+            return {
+                "success": False,
+                "text": "",
+                "error": f"Filen är för stor ({file_size_mb:.1f}MB). Max 25MB tillåtet."
+            }
+
+        # Validera filformat
+        valid_extensions = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm', '.ogg']
+        file_ext = os.path.splitext(audio.filename)[1].lower()
+
+        if file_ext not in valid_extensions:
+            return {
+                "success": False,
+                "text": "",
+                "error": f"Ogiltigt filformat: {file_ext}. Stödda format: {', '.join(valid_extensions)}"
+            }
+
         # Spara temporärt
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio.filename)[1]) as tmp_file:
-            content = await audio.read()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
             tmp_file.write(content)
             tmp_path = tmp_file.name
 
-        try:
-            # Transkribera med Groq Whisper
-            transcription = ai.transcribe_audio(tmp_path)
+        # Transkribera med Groq Whisper
+        transcription = ai.transcribe_audio(tmp_path)
+
+        if not transcription or len(transcription.strip()) == 0:
             return {
-                "success": True,
-                "text": transcription,
-                "error": None
+                "success": False,
+                "text": "",
+                "error": "Ingen text kunde transkriberas. Försök prata tydligare."
             }
-        finally:
-            # Rensa temp-fil
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+
+        return {
+            "success": True,
+            "text": transcription,
+            "error": None
+        }
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Transcription error: {error_details}")
+
         return {
             "success": False,
             "text": "",
             "error": f"Fel vid transkribering: {str(e)}"
         }
+
+    finally:
+        # Rensa temp-fil
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
 
 # AI Chat endpoint
 @app.post("/api/ai/chat", response_model=schemas.ChatResponse)
