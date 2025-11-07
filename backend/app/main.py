@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+import tempfile
+import os
 
 from . import models, schemas, crud, notifications, ai
 from .database import engine, get_db
@@ -154,6 +156,41 @@ def run_migration(db: Session = Depends(get_db)):
         results.append(f"recurrence_end_date: {str(e)}")
 
     return {"status": "migration completed", "results": results}
+
+# AI Voice Transcription endpoint
+@app.post("/api/ai/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """
+    Transkribera ljud till text med Groq Whisper API
+
+    Stödjer format: mp3, mp4, mpeg, mpga, m4a, wav, webm
+    """
+    try:
+        # Spara temporärt
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio.filename)[1]) as tmp_file:
+            content = await audio.read()
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+
+        try:
+            # Transkribera med Groq Whisper
+            transcription = ai.transcribe_audio(tmp_path)
+            return {
+                "success": True,
+                "text": transcription,
+                "error": None
+            }
+        finally:
+            # Rensa temp-fil
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "text": "",
+            "error": f"Fel vid transkribering: {str(e)}"
+        }
 
 # AI Chat endpoint
 @app.post("/api/ai/chat", response_model=schemas.ChatResponse)

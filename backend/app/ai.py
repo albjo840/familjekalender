@@ -85,6 +85,29 @@ def _mark_event_created(session_id: str, event_data: Dict[str, Any], event_id: i
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
+def transcribe_audio(audio_file_path: str) -> str:
+    """
+    Transkribera ljudfil till text med Groq Whisper API
+
+    Args:
+        audio_file_path: Sökväg till ljudfilen
+
+    Returns:
+        Transkriberad text
+    """
+    try:
+        with open(audio_file_path, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                file=audio_file,
+                model="whisper-large-v3-turbo",
+                language="sv",  # Svenska
+                response_format="text"
+            )
+        return transcription
+    except Exception as e:
+        raise Exception(f"Whisper transkribering misslyckades: {str(e)}")
+
+
 # Verktyg som AI:n kan använda
 TOOLS = [
     {

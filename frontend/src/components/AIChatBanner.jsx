@@ -15,8 +15,12 @@ function AIChatBanner({ onEventCreated }) {
   const [conversationHistory, setConversationHistory] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId] = useState(generateSessionId())
+  const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
 
   // Auto-scroll till senaste meddelandet
   const scrollToBottom = () => {
@@ -36,14 +40,105 @@ function AIChatBanner({ onEventCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    await submitMessage()
+  }
 
-    if (!message.trim() || isLoading) return
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e)
+    }
+  }
 
-    const userMessage = message.trim()
+  const clearChat = () => {
+    setConversationHistory([])
+  }
+
+  // Starta ljudinspelning
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm'
+      })
+
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        await transcribeAudio(audioBlob)
+
+        // Stäng av mikrofonen
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorderRef.current = mediaRecorder
+      mediaRecorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      console.error('Fel vid åtkomst till mikrofon:', error)
+      alert('Kunde inte komma åt mikrofonen. Kontrollera att du har gett tillåtelse.')
+    }
+  }
+
+  // Stoppa ljudinspelning
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  }
+
+  // Transkribera ljud med Groq Whisper
+  const transcribeAudio = async (audioBlob) => {
+    setIsTranscribing(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('audio', audioBlob, 'recording.webm')
+
+      const response = await axios.post(`${API_URL}/ai/transcribe`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      if (response.data.success && response.data.text) {
+        const transcribedText = response.data.text.trim()
+        setMessage(transcribedText)
+
+        // Auto-submit om det finns text
+        if (transcribedText) {
+          // Simulera form submit med transkriberad text
+          await submitMessage(transcribedText)
+        }
+      } else {
+        console.error('Transkribering misslyckades:', response.data.error)
+        alert('Kunde inte transkribera ljudet. Försök igen.')
+      }
+    } catch (error) {
+      console.error('Fel vid transkribering:', error)
+      alert('Ett fel uppstod vid transkribering. Försök igen.')
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  // Extrahera submit-logik till egen funktion
+  const submitMessage = async (textToSend) => {
+    const userMessage = textToSend || message.trim()
+
+    if (!userMessage || isLoading) return
+
     setMessage('')
     setIsLoading(true)
 
-    // Lägg till användarmeddelande direkt i UI
     const newHistory = [...conversationHistory, { role: 'user', content: userMessage }]
     setConversationHistory(newHistory)
 
@@ -55,15 +150,11 @@ function AIChatBanner({ onEventCreated }) {
       })
 
       if (response.data.success) {
-        // Uppdatera med AI:ns svar och komplett historik
         setConversationHistory(response.data.conversation_history)
-
-        // Om en händelse skapades, uppdatera kalendern
         if (onEventCreated) {
           onEventCreated()
         }
       } else {
-        // Fel från AI:n
         setConversationHistory([
           ...newHistory,
           {
@@ -84,17 +175,6 @@ function AIChatBanner({ onEventCreated }) {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit(e)
-    }
-  }
-
-  const clearChat = () => {
-    setConversationHistory([])
   }
 
   return (
@@ -181,27 +261,41 @@ function AIChatBanner({ onEventCreated }) {
 
           {/* Input form */}
           <form className="ai-chat-input" onSubmit={handleSubmit}>
+            {/* Mikrofon-knapp */}
+            <button
+              type="button"
+              className={`voice-button ${isRecording ? 'recording' : ''}`}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading || isTranscribing}
+              title={isRecording ? 'Stoppa inspelning' : 'Håll in för att prata'}
+            >
+              {isTranscribing ? '⏳' : isRecording ? '🔴' : '🎤'}
+            </button>
+
             <input
               ref={inputRef}
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Skriv ditt meddelande..."
-              disabled={isLoading}
+              placeholder={isRecording ? 'Spelar in...' : isTranscribing ? 'Transkriberar...' : 'Skriv eller prata...'}
+              disabled={isLoading || isRecording || isTranscribing}
             />
+
             <button
               type="submit"
-              disabled={!message.trim() || isLoading}
+              disabled={!message.trim() || isLoading || isRecording || isTranscribing}
               title="Skicka meddelande"
             >
               {isLoading ? '⏳' : '📤'}
             </button>
           </form>
 
-          {/* Info about deduplication */}
+          {/* Info about deduplication and voice */}
           <div className="ai-chat-footer">
-            <small>✅ Dubblettskydd aktivt - endast en bokning skapas per förfrågan</small>
+            <small>
+              ✅ Dubblettskydd aktivt | 🎤 Röststyrning med Groq Whisper
+            </small>
           </div>
         </div>
       )}
