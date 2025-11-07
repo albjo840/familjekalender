@@ -57,6 +57,7 @@
 .calendar-container {
   flex: 1;
   padding: 20px 40px;
+  padding-bottom: 80px; /* Extra space for AI chat banner */
   overflow: hidden;
 }
 
@@ -96,6 +97,7 @@
 
   .calendar-container {
     padding: 12px;
+    padding-bottom: 70px; /* Extra space for AI chat banner on mobile */
     overflow: auto;
   }
 

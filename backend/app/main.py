@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from . import models, schemas, crud, notifications
+from . import models, schemas, crud, notifications, ai
 from .database import engine, get_db
 
 # Databas-tabeller skapas via init_users.py
@@ -154,6 +154,40 @@ def run_migration(db: Session = Depends(get_db)):
         results.append(f"recurrence_end_date: {str(e)}")
 
     return {"status": "migration completed", "results": results}
+
+# AI Chat endpoint
+@app.post("/api/ai/chat", response_model=schemas.ChatResponse)
+def chat_with_assistant(chat_request: schemas.ChatRequest, db: Session = Depends(get_db)):
+    """
+    Chat med AI-assistenten om kalenderhändelser
+
+    AI:n kan:
+    - Svara på frågor om bokningar
+    - Skapa nya bokningar
+    - Visa vad som är bokat för olika familjemedlemmar
+
+    VIKTIGT: session_id används för att förhindra multipla bokningar
+    """
+    # Konvertera ChatMessage objekt till dict för AI-funktionen
+    history = [{"role": msg.role, "content": msg.content} for msg in chat_request.conversation_history]
+
+    result = ai.chat_with_ai(
+        message=chat_request.message,
+        db=db,
+        session_id=chat_request.session_id,
+        conversation_history=history
+    )
+
+    # Konvertera tillbaka till ChatMessage objekt
+    conv_history = [schemas.ChatMessage(role=msg["role"], content=msg["content"])
+                    for msg in result.get("conversation_history", [])]
+
+    return schemas.ChatResponse(
+        success=result.get("success", False),
+        message=result.get("message", ""),
+        conversation_history=conv_history,
+        error=result.get("error")
+    )
 
 # Root endpoint
 @app.get("/")

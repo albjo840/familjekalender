@@ -6,6 +6,7 @@ import axios from 'axios'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import './App.css'
 import EventModal from './components/EventModal'
+import AIChatBanner from './components/AIChatBanner'
 
 const locales = {
   'sv': sv,
@@ -197,6 +198,9 @@ function App() {
           }}
         />
       )}
+
+      {/* AI Chat Banner - sticky footer */}
+      <AIChatBanner onEventCreated={fetchEvents} />
     </div>
   )
 }

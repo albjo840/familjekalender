@@ -55,3 +55,19 @@ class Event(EventBase):
 
     class Config:
         from_attributes = True
+
+# AI Chat schemas
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str
+    conversation_history: Optional[list[ChatMessage]] = []
+
+class ChatResponse(BaseModel):
+    success: bool
+    message: str
+    conversation_history: list[ChatMessage]
+    error: Optional[str] = None
