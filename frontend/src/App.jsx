@@ -32,6 +32,7 @@ const formats = {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
+const CACHE_VERSION = 'v2' // Öka detta när cache-format ändras
 
 function App() {
   const [events, setEvents] = useState([])
@@ -54,29 +55,46 @@ function App() {
 
   // Ladda cachad data först, sedan hämta färsk data
   useEffect(() => {
-    // Ladda cached events omedelbart
-    const cachedEvents = localStorage.getItem('familjekalender_events')
-    if (cachedEvents) {
-      try {
-        const parsed = JSON.parse(cachedEvents)
-        const formatted = parsed.map(event => ({
-          ...event,
-          start: new Date(event.start),
-          end: new Date(event.end)
-        }))
-        setEvents(formatted)
-      } catch (e) {
-        console.error('Fel vid laddning av cachade events:', e)
+    // Kontrollera cache-version och rensa om den är gammal
+    const cachedVersion = localStorage.getItem('familjekalender_cache_version')
+    if (cachedVersion !== CACHE_VERSION) {
+      console.log('Cache version mismatch, clearing cache...')
+      localStorage.removeItem('familjekalender_events')
+      localStorage.removeItem('familjekalender_users')
+      localStorage.setItem('familjekalender_cache_version', CACHE_VERSION)
+    } else {
+      // Ladda cached events omedelbart
+      const cachedEvents = localStorage.getItem('familjekalender_events')
+      if (cachedEvents) {
+        try {
+          const parsed = JSON.parse(cachedEvents)
+          // Formatera events för kalendern
+          const formatted = parsed.map(event => ({
+            id: event.id,
+            title: event.title,
+            start: new Date(event.start),
+            end: new Date(event.end),
+            resource: event.resource
+          }))
+          setEvents(formatted)
+          console.log(`Loaded ${formatted.length} cached events`)
+        } catch (e) {
+          console.error('Fel vid laddning av cachade events:', e)
+          localStorage.removeItem('familjekalender_events')
+        }
       }
-    }
 
-    // Ladda cached users omedelbart
-    const cachedUsers = localStorage.getItem('familjekalender_users')
-    if (cachedUsers) {
-      try {
-        setUsers(JSON.parse(cachedUsers))
-      } catch (e) {
-        console.error('Fel vid laddning av cachade användare:', e)
+      // Ladda cached users omedelbart
+      const cachedUsers = localStorage.getItem('familjekalender_users')
+      if (cachedUsers) {
+        try {
+          const parsed = JSON.parse(cachedUsers)
+          setUsers(parsed)
+          console.log(`Loaded ${parsed.length} cached users`)
+        } catch (e) {
+          console.error('Fel vid laddning av cachade användare:', e)
+          localStorage.removeItem('familjekalender_users')
+        }
       }
     }
 

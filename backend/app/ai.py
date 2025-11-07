@@ -6,6 +6,7 @@ Hanterar konversationer och bokningar med dedupliceringssystem
 import os
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from groq import Groq
@@ -106,15 +107,14 @@ def transcribe_audio(audio_file_path: str) -> str:
 
         print(f"Transcribing audio file: {audio_file_path} ({file_size} bytes)")
 
-        with open(audio_file_path, "rb") as audio_file:
-            # Groq Whisper API call
-            transcription = client.audio.transcriptions.create(
-                file=(os.path.basename(audio_file_path), audio_file.read(), "audio/webm"),
-                model="whisper-large-v3-turbo",
-                language="sv",  # Svenska
-                response_format="text",
-                temperature=0.0  # Mer deterministisk transkribering
-            )
+        # Groq Whisper API call - använd Path objekt enligt officiell dokumentation
+        transcription = client.audio.transcriptions.create(
+            file=Path(audio_file_path),
+            model="whisper-large-v3-turbo",
+            language="sv",  # Svenska
+            response_format="text",
+            temperature=0.0  # Mer deterministisk transkribering
+        )
 
         print(f"Transcription result: {transcription[:100] if len(transcription) > 100 else transcription}")
         return transcription
