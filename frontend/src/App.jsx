@@ -40,6 +40,8 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true)
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true)
 
   // Detektera mobilskärm
   useEffect(() => {
@@ -50,20 +52,83 @@ function App() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Hämta användare
+  // Ladda cachad data först, sedan hämta färsk data
   useEffect(() => {
-    fetchUsers()
+    // Ladda cached events omedelbart
+    const cachedEvents = localStorage.getItem('familjekalender_events')
+    if (cachedEvents) {
+      try {
+        const parsed = JSON.parse(cachedEvents)
+        const formatted = parsed.map(event => ({
+          ...event,
+          start: new Date(event.start),
+          end: new Date(event.end)
+        }))
+        setEvents(formatted)
+      } catch (e) {
+        console.error('Fel vid laddning av cachade events:', e)
+      }
+    }
+
+    // Ladda cached users omedelbart
+    const cachedUsers = localStorage.getItem('familjekalender_users')
+    if (cachedUsers) {
+      try {
+        setUsers(JSON.parse(cachedUsers))
+      } catch (e) {
+        console.error('Fel vid laddning av cachade användare:', e)
+      }
+    }
+
+    // Hämta färsk data parallellt
+    fetchUsersAndEvents()
   }, [])
 
-  // Hämta events
-  useEffect(() => {
-    fetchEvents()
-  }, [])
+  // Hämta användare och events parallellt
+  const fetchUsersAndEvents = async () => {
+    try {
+      const [usersResponse, eventsResponse] = await Promise.all([
+        axios.get(`${API_URL}/users`),
+        axios.get(`${API_URL}/events`)
+      ])
+
+      // Uppdatera users
+      setUsers(usersResponse.data)
+      localStorage.setItem('familjekalender_users', JSON.stringify(usersResponse.data))
+      setIsLoadingUsers(false)
+
+      // Uppdatera events
+      const formattedEvents = eventsResponse.data.map(event => ({
+        id: event.id,
+        title: event.title,
+        start: new Date(event.start_time),
+        end: new Date(event.end_time),
+        resource: event,
+      }))
+      setEvents(formattedEvents)
+
+      // Cacha events (spara med ISO strings för att kunna serialisera)
+      const eventsToCache = eventsResponse.data.map(event => ({
+        id: event.id,
+        title: event.title,
+        start: event.start_time,
+        end: event.end_time,
+        resource: event,
+      }))
+      localStorage.setItem('familjekalender_events', JSON.stringify(eventsToCache))
+      setIsLoadingEvents(false)
+    } catch (error) {
+      console.error('Fel vid hämtning av data:', error)
+      setIsLoadingUsers(false)
+      setIsLoadingEvents(false)
+    }
+  }
 
   const fetchUsers = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`)
       setUsers(response.data)
+      localStorage.setItem('familjekalender_users', JSON.stringify(response.data))
     } catch (error) {
       console.error('Fel vid hämtning av användare:', error)
     }
@@ -80,6 +145,16 @@ function App() {
         resource: event,
       }))
       setEvents(formattedEvents)
+
+      // Cacha events
+      const eventsToCache = response.data.map(event => ({
+        id: event.id,
+        title: event.title,
+        start: event.start_time,
+        end: event.end_time,
+        resource: event,
+      }))
+      localStorage.setItem('familjekalender_events', JSON.stringify(eventsToCache))
     } catch (error) {
       console.error('Fel vid hämtning av händelser:', error)
     }
@@ -163,6 +238,20 @@ function App() {
       </header>
 
       <div className="calendar-container">
+        {(isLoadingEvents || isLoadingUsers) && events.length === 0 && (
+          <div className="loading-overlay">
+            <div className="loading-spinner"></div>
+            <p>Laddar kalender...</p>
+          </div>
+        )}
+
+        {(isLoadingEvents || isLoadingUsers) && events.length > 0 && (
+          <div className="loading-badge">
+            <div className="loading-spinner-small"></div>
+            <span>Uppdaterar...</span>
+          </div>
+        )}
+
         <Calendar
           localizer={localizer}
           events={events}
