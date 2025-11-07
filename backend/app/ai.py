@@ -379,11 +379,12 @@ Dedupliceringssystem är aktivt - om du försöker skapa samma händelse flera g
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
-            max_tokens=1000
+            max_tokens=1000,
+            temperature=0.1  # Lägre temperatur för mer konsekventa function calls
         )
 
         assistant_message = response.choices[0].message
-        tool_calls = assistant_message.tool_calls
+        tool_calls = getattr(assistant_message, 'tool_calls', None)
 
         # Om AI:n vill använda verktyg
         if tool_calls:
