@@ -222,8 +222,6 @@ function AIChatBanner({ onEventCreated }) {
         <div className="ai-chat-container">
           {/* Header */}
           <div className="ai-chat-header">
-            <h3>🤖 Kalendern AI-assistent</h3>
-            <p className="ai-chat-subtitle">Fråga mig om bokningar eller skapa nya händelser</p>
             {conversationHistory.length > 0 && (
               <button
                 className="clear-chat-btn"
@@ -239,18 +237,6 @@ function AIChatBanner({ onEventCreated }) {
           <div className="ai-chat-messages">
             {conversationHistory.length === 0 ? (
               <div className="ai-welcome-message">
-                <p>👋 Hej! Jag är din AI-assistent för kalendern.</p>
-                <p>Jag kan hjälpa dig med:</p>
-                <ul>
-                  <li>📅 Se vad som är bokat</li>
-                  <li>➕ Skapa nya bokningar</li>
-                  <li>👥 Kolla vem som är bokad när</li>
-                </ul>
-                <p className="ai-example">
-                  <strong>Exempel:</strong><br/>
-                  "Vad har jag bokat imorgon?"<br/>
-                  "Boka lunch med Maria kl 12 på fredag"
-                </p>
               </div>
             ) : (
               conversationHistory.map((msg, index) => (
@@ -286,42 +272,24 @@ function AIChatBanner({ onEventCreated }) {
 
           {/* Input form */}
           <form className="ai-chat-input" onSubmit={handleSubmit}>
-            {/* Mikrofon-knapp */}
-            <button
-              type="button"
-              className={`voice-button ${isRecording ? 'recording' : ''}`}
-              onClick={isRecording ? stopRecording : startRecording}
-              disabled={isLoading || isTranscribing}
-              title={isRecording ? 'Stoppa inspelning' : 'Håll in för att prata'}
-            >
-              {isTranscribing ? '⏳' : isRecording ? '🔴' : '🎤'}
-            </button>
-
             <input
               ref={inputRef}
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={isRecording ? 'Spelar in...' : isTranscribing ? 'Transkriberar...' : 'Skriv eller prata...'}
-              disabled={isLoading || isRecording || isTranscribing}
+              placeholder="Skriv ditt meddelande..."
+              disabled={isLoading}
             />
 
             <button
               type="submit"
-              disabled={!message.trim() || isLoading || isRecording || isTranscribing}
+              disabled={!message.trim() || isLoading}
               title="Skicka meddelande"
             >
               {isLoading ? '⏳' : '📤'}
             </button>
           </form>
-
-          {/* Info about deduplication and voice */}
-          <div className="ai-chat-footer">
-            <small>
-              ✅ Dubblettskydd aktivt | 🎤 Röststyrning med Groq Whisper
-            </small>
-          </div>
         </div>
       )}
     </div>

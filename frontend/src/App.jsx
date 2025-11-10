@@ -284,6 +284,10 @@ function App() {
           defaultView={isMobile ? 'week' : 'month'}
           culture="sv"
           formats={formats}
+          min={new Date(new Date().setHours(7, 0, 0))}
+          max={new Date(new Date().setHours(23, 59, 59))}
+          step={30}
+          timeslots={2}
           messages={{
             next: "Nästa",
             previous: "Föregående",

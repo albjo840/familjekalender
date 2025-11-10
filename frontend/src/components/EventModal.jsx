@@ -77,10 +77,24 @@ function EventModal({ users, event, slot, onSave, onDelete, onClose }) {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }))
+
+    // Om starttiden ändras, justera automatiskt sluttiden till en timme senare
+    if (name === 'start_time' && value) {
+      const startDate = new Date(value)
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000) // Lägg till 1 timme
+      const endTimeLocal = endDate.toISOString().slice(0, 16)
+
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        end_time: endTimeLocal
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }))
+    }
   }
 
   const getUserColor = (userId) => {
